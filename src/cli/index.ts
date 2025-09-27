@@ -62,6 +62,10 @@ export const getUserIp = async () => {
   return ip.trim();
 }
 
+export const ssh = async (ip: string, command: string) => {
+  return await $`ssh -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
+}
+
 program.command("status").action(async () => {
   const config = getConfig();
   if (config.instanceId === undefined) {
@@ -97,7 +101,7 @@ program.command("status").action(async () => {
   console.log(`Checking configuration...`);
 
   // Ping the ip
-  const { exitCode } = await $`ping -c 1 ${config.ip}`.nothrow();
+  const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'");
   if (exitCode !== 0) {
     console.log("IP address is not reachable, checking security group");
 
