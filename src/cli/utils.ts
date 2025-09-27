@@ -173,7 +173,7 @@ export const ensureTailscale = async (config: any) => {
   }
 
   console.log("Tailscale is not running, starting it");
-  await ssh(config.ip, `sudo tailscale up --auth-key=${config.tailscaleAuthKey}`);
+  await ssh(config.ip, `sudo tailscale up --auth-key=${config.tailscaleAuthKey} --hostname=cloud-router`);
 
   const status2 = await getTailscaleStatus(config);
   if (status2.Online) {
@@ -201,3 +201,8 @@ export const ensureTailscale = async (config: any) => {
     console.log('Failed to query Tailscale status; ensure it\'s running.');
   }
 };
+
+export const canPingCloudRouter = async (config: any) => {
+  const pingRes = await $`ping -c 1 cloud-router`.quiet().nothrow();
+  return pingRes.exitCode === 0;
+}
