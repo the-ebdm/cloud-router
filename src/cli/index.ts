@@ -3,6 +3,9 @@ import path from "path";
 import fs from "fs";
 import { $ } from "bun";
 
+// Minimal Bun type shim for environments without @types/bun
+declare const Bun: any;
+
 export const defaultConfig = {
   provider: "aws",
   class: "t4g.nano",
@@ -66,6 +69,53 @@ export const ssh = async (ip: string, command: string) => {
   return await $`ssh -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
 }
 
+// Helper: describe an instance
+export const describeInstance = async (instanceId: string, region: string) => {
+  return await $`aws ec2 describe-instances --instance-ids ${instanceId} --region ${region} --query 'Reservations[0].Instances[0]' --output json`.json();
+}
+
+// Helper: describe a security group
+export const describeSecurityGroup = async (groupId: string, region: string) => {
+  return await $`aws ec2 describe-security-groups --group-ids ${groupId} --region ${region} --query 'SecurityGroups[0]' --output json`.quiet().json();
+}
+
+// Helper: ensure a security group exists (idempotent). Returns groupId.
+export const ensureSecurityGroup = async (config: any, region: string) => {
+  if (config.securityGroupId) {
+    return config.securityGroupId;
+  }
+
+  const groupId = (await $`aws ec2 create-security-group --group-name cloud-router --description "Cloud Router Security Group" --vpc-id ${config.vpcId} --query 'GroupId' --output text`.text()).trim();
+  config.securityGroupId = groupId;
+  setConfig(config);
+  return groupId;
+}
+
+// Helper: ensure SSH ingress for the user's IP is present on the security group
+export const ensureSshIngress = async (groupId: string, region: string) => {
+  const sg = await describeSecurityGroup(groupId, region);
+  const userIp = await getUserIp();
+  const desiredCidr = `${userIp}/32`;
+
+  const hasRule = sg.IpPermissions.some((rule: any) =>
+    rule.IpProtocol === "tcp" && rule.FromPort === 22 && rule.ToPort === 22 && rule.IpRanges.some((r: any) => r.CidrIp === desiredCidr)
+  );
+
+  if (!hasRule) {
+    await $`aws ec2 authorize-security-group-ingress --group-id ${groupId} --protocol tcp --port 22 --cidr ${desiredCidr}`.quiet();
+  }
+}
+
+// Helper: attach security group to instance if not already attached
+export const ensureSecurityGroupAttached = async (instanceId: string, groupId: string, region: string) => {
+  const instance = await $`aws ec2 describe-instances --instance-ids ${instanceId} --region ${region} --query 'Reservations[0].Instances[0].SecurityGroups' --output json`.json();
+  const attached = instance.some((g: any) => g.GroupId === groupId);
+  if (!attached) {
+    // Replace instance groups with the desired one (note: this will remove other groups)
+    await $`aws ec2 modify-instance-attribute --instance-id ${instanceId} --groups ${groupId} --region ${region}`.quiet();
+  }
+}
+
 program.command("status").action(async () => {
   const config = getConfig();
   if (config.instanceId === undefined) {
@@ -105,29 +155,11 @@ program.command("status").action(async () => {
   if (exitCode !== 0) {
     console.log("IP address is not reachable, checking security group");
 
-    if (config.securityGroupId === undefined) {
-      console.log("Security group ID not found, creating a new one");
-      const securityGroupId = (await $`aws ec2 create-security-group --group-name cloud-router --description "Cloud Router Security Group" --vpc-id ${config.vpcId} --query 'GroupId' --output text`.text()).trim();
-      config.securityGroupId = securityGroupId;
-      setConfig(config);
-    }
-
-    const securityGroup = await $`aws ec2 describe-security-groups --group-ids ${config.securityGroupId} --region ${config.region} --query 'SecurityGroups[0]' --output json`.quiet().json();
-    if (securityGroup.IpPermissions.length === 0) {
-      console.log("Security group has no inbound rules, adding a new one");
-      const userIp = await getUserIp();
-      await $`aws ec2 authorize-security-group-ingress --group-id ${config.securityGroupId} --protocol tcp --port 22 --cidr ${userIp}/32`.quiet();
-    } else {
-      console.log("Security group has inbound rules, checking if user IP is in the rules");
-      const userIp = await getUserIp();
-      const inRules = securityGroup.IpPermissions.some((rule: any) => rule.IpRanges.some((range: any) => range.CidrIp === `${userIp}/32`));
-      if (!inRules) {
-        console.log("User IP is not in the rules, adding a new one");
-        await $`aws ec2 authorize-security-group-ingress --group-id ${config.securityGroupId} --protocol tcp --port 22 --cidr ${userIp}/32`.quiet();
-      } else {
-        console.log("User IP is in the rules, no need to add a new one");
-      }
-    }
+    // Ensure security group exists, has SSH ingress, and is attached to the instance
+    const securityGroupId = await ensureSecurityGroup(config, config.region);
+    await ensureSshIngress(securityGroupId, config.region);
+    await ensureSecurityGroupAttached(config.instanceId, securityGroupId, config.region);
+    console.log("Security group checked/updated; try connecting again.");
   }
 });
 
@@ -200,32 +232,29 @@ program.command("start").action(async () => {
         return;
       }
 
-      // Launch the instance in the specified VPC and subnet
-      const instance = await $`aws ec2 run-instances --image-id ${config.ami} --instance-type ${config.class} --key-name ${config.key} --region ${region} --subnet-id ${config.subnetId} --associate-public-ip-address`.json();
+      // Ensure security group exists and has SSH ingress before launching
+      const securityGroupId = await ensureSecurityGroup(config, region);
+      await ensureSshIngress(securityGroupId, region);
+
+      // Launch the instance in the specified VPC and subnet with the security group
+      const instance = await $`aws ec2 run-instances --image-id ${config.ami} --instance-type ${config.class} --key-name ${config.key} --region ${region} --subnet-id ${config.subnetId} --associate-public-ip-address --security-group-ids ${securityGroupId}`.json();
       console.log(instance);
       config.instanceId = instance.Instances[0].InstanceId;
       setConfig(config);
 
       console.log(`Instance ID: ${config.instanceId} started...`);
 
-      const userIp = await getUserIp();
-      console.log(`User IP: ${userIp}`);
-
-      const securityGroupId = (await $`aws ec2 create-security-group --group-name cloud-router --description "Cloud Router Security Group" --vpc-id ${config.vpcId} --query 'GroupId' --output text`.text()).trim();
-      await $`aws ec2 authorize-security-group-ingress --group-id ${securityGroupId} --protocol tcp --port 22 --cidr ${userIp}/32`;
-      config.securityGroupId = securityGroupId;
-      setConfig(config);
-
-      console.log(`Security Group ID: ${securityGroupId} created`);
+      // Ensure the security group is attached to the instance
+      await ensureSecurityGroupAttached(config.instanceId, securityGroupId, region);
 
       let up = false;
       while (!up) {
-        const instance = await $`aws ec2 describe-instances --instance-ids ${config.instanceId} --region ${region}`.json();
-        console.log(instance);
-        if (instance.Instances[0].State.Name === "running") {
+        const instanceDesc = await describeInstance(config.instanceId, region);
+        console.log(instanceDesc);
+        if (instanceDesc.State.Name === "running") {
           up = true;
         }
-        await Bun.sleep(1000);
+        await new Promise((r) => setTimeout(r, 1000));
       }
 
       console.log(`Instance is up, getting public IP...`);
