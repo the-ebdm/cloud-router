@@ -47,8 +47,16 @@ program.command("status").action(async () => {
     return;
   }
 
-  // Connect to the instance (short timeout for first check)
-  const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", 5000);
+  const config = getConfig();  // Refresh config
+
+  // Check Tailscale if not set
+  if (!config.tailscaleIp && status === "running") {
+    console.log("Tailscale IP not set; configuring...");
+    await ensureTailscale(config);
+  }
+
+  // Connect using preferred IP (ssh function handles fallback)
+  const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", 5000);  // ssh will use tailscaleIp if avail
   if (exitCode !== 0) {
     console.log("IP address is not reachable, starting verbose diagnostics...");
 

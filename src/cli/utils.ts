@@ -66,9 +66,12 @@ export const getUserIp = async () => {
   return ip.trim();
 }
 
-export const ssh = async (ip: string, command: string, timeout: number = 30000) => {
-  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
-}
+export const ssh = async (ip: string, command: string, timeout: number = 10000) => {
+  const config = getConfig();
+  const targetIp = config.tailscaleIp || ip;  // Prefer Tailscale if available
+  console.log(`SSHing to ${targetIp} (using ${config.tailscaleIp ? 'Tailscale' : 'public'} IP)`);
+  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
+};
 
 // Helper: describe an instance
 export const describeInstance = async (instanceId: string, region: string) => {
@@ -178,4 +181,23 @@ export const ensureTailscale = async (config: any) => {
   } else {
     console.log("Tailscale failed to start");
   }
-}
+
+  // Get Tailscale status via SSH to public IP (fallback if needed)
+  const statusRes = await ssh(config.ip, 'tailscale status --json', 10000);
+  if (statusRes.exitCode === 0) {
+    try {
+      const tsStatus = JSON.parse(statusRes.text);
+      if (tsStatus.Self && tsStatus.Self.TailscaleIPs && tsStatus.Self.TailscaleIPs.length > 0) {
+        config.tailscaleIp = tsStatus.Self.TailscaleIPs[0];  // First IPv4
+        setConfig(config);
+        console.log(`Tailscale IP assigned: ${config.tailscaleIp}`);
+      } else {
+        console.log('Tailscale running but no IP assigned; run "sudo tailscale up" manually and auth.');
+      }
+    } catch (e) {
+      console.log(`Failed to parse Tailscale status: ${e}`);
+    }
+  } else {
+    console.log('Failed to query Tailscale status; ensure it\'s running.');
+  }
+};
