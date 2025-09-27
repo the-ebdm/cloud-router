@@ -1,5 +1,5 @@
 import express from "express";
-import { createApiKey, getApiKeyById, getAllApiKeys, updateApiKey, deleteApiKey } from "../lib/database";
+import { createApiKey, getApiKeyById, getAllApiKeys, updateApiKey, deleteApiKey } from "@/lib/database";
 
 const apiKeysRouter = express.Router();
 

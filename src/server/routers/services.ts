@@ -1,5 +1,5 @@
 import express from "express";
-import { createService, getServiceById, getAllServices, updateService, deleteService } from "../lib/database";
+import { createService, getServiceById, getAllServices, updateService, deleteService } from "@/lib/database";
 
 const servicesRouter = express.Router();
 

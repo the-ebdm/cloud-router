@@ -1,5 +1,5 @@
 import express from "express";
-import { createRoute, getRouteById, getAllRoutes, updateRoute, deleteRoute } from "../lib/database";
+import { createRoute, getRouteById, getAllRoutes, updateRoute, deleteRoute } from "@/lib/database";
 
 const routesRouter = express.Router();
 

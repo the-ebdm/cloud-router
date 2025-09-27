@@ -1,5 +1,5 @@
 import express from "express";
-import { createHealthCheck, getHealthCheckById, getAllHealthChecks, updateHealthCheck, deleteHealthCheck } from "../lib/database";
+import { createHealthCheck, getHealthCheckById, getAllHealthChecks, updateHealthCheck, deleteHealthCheck } from "@/lib/database";
 
 const healthChecksRouter = express.Router();
 

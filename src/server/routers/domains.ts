@@ -1,5 +1,5 @@
 import express from "express";
-import { createDomain, getDomainById, getAllDomains, updateDomain, deleteDomain } from "../lib/database";
+import { createDomain, getDomainById, getAllDomains, updateDomain, deleteDomain } from "@/lib/database";
 
 const domainsRouter = express.Router();
 

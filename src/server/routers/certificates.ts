@@ -1,5 +1,5 @@
 import express from "express";
-import { createCertificate, getCertificateById, getAllCertificates, updateCertificate, deleteCertificate } from "../lib/database";
+import { createCertificate, getCertificateById, getAllCertificates, updateCertificate, deleteCertificate } from "@/lib/database";
 
 const certificatesRouter = express.Router();
 
