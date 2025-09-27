@@ -105,10 +105,40 @@ export const ensureSshIngress = async (groupId: string, region: string) => {
 
 // Helper: attach security group to instance if not already attached
 export const ensureSecurityGroupAttached = async (instanceId: string, groupId: string, region: string) => {
-  const instance = await $`aws ec2 describe-instances --instance-ids ${instanceId} --region ${region} --query 'Reservations[0].Instances[0].SecurityGroups' --output json`.json();
-  const attached = instance.some((g: any) => g.GroupId === groupId);
-  if (!attached) {
-    // Replace instance groups with the desired one (note: this will remove other groups)
-    await $`aws ec2 modify-instance-attribute --instance-id ${instanceId} --groups ${groupId} --region ${region}`.quiet();
+  // Return an object with before/after attachment state and the modify command result
+  const instanceSgs = await $`aws ec2 describe-instances --instance-ids ${instanceId} --region ${region} --query 'Reservations[0].Instances[0].SecurityGroups' --output json`.json();
+  const before = instanceSgs.map((g: any) => g.GroupId);
+  const alreadyAttached = before.includes(groupId);
+  if (alreadyAttached) {
+    return { attached: true, before, after: before };
+  }
+
+  // Preserve existing groups and add the desired one
+  const groupsToSet = Array.from(new Set([...before, groupId]));
+  try {
+    const modifyRes = await $`aws ec2 modify-instance-attribute --instance-id ${instanceId} --groups ${groupsToSet.join(" ")} --region ${region}`.nothrow();
+    const instanceSgsAfter = await $`aws ec2 describe-instances --instance-ids ${instanceId} --region ${region} --query 'Reservations[0].Instances[0].SecurityGroups' --output json`.json();
+    const after = instanceSgsAfter.map((g: any) => g.GroupId);
+    return { attached: after.includes(groupId), before, after, modifyResult: modifyRes };
+  } catch (err) {
+    return { attached: false, before, after: before, modifyError: err };
   }
 }
+
+// Helper: ensure SSH key file has correct permissions (0600 or 0400)
+export const ensureKeyPermissions = () => {
+  const keyFilePath = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
+  if (!fs.existsSync(keyFilePath)) {
+    console.log("SSH key file not found; ensure 'start' has been run.");
+    return false;
+  }
+  const stats = fs.statSync(keyFilePath);
+  const mode = stats.mode & 0o777;
+  if (mode !== 0o600 && mode !== 0o400) {
+    console.log(`Fixing SSH key permissions (was ${mode.toString(8)}, setting to 0400)`);
+    fs.chmodSync(keyFilePath, 0o400);
+    return true;
+  }
+  console.log("SSH key permissions are correct.");
+  return true;
+};

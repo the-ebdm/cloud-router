@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions } from "./utils";
 
 program.command("status").action(async () => {
   const config = getConfig();
@@ -39,16 +39,63 @@ program.command("status").action(async () => {
 
   console.log(`Checking configuration...`);
 
-  // Connect to the instance
+  // Ensure key permissions before SSH
+  const keyOk = await ensureKeyPermissions();
+  if (!keyOk) {
+    console.log("SSH key issue detected. Fix manually with: chmod 400 ~/.cloud-router/cloud-router.pem");
+    console.log("Skipping SSH connectivity check.");
+    return;
+  }
+
+  // Connect to the instance (short timeout for first check)
   const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", 5000);
   if (exitCode !== 0) {
-    console.log("IP address is not reachable, checking security group");
+    console.log("IP address is not reachable, starting verbose diagnostics...");
 
-    // Ensure security group exists, has SSH ingress, and is attached to the instance
+    // Ensure security group exists
     const securityGroupId = await ensureSecurityGroup(config, config.region);
+    console.log(`Using security group: ${securityGroupId}`);
+
+    const userIp = await getUserIp();
+    console.log(`Detected user public IP: ${userIp}`);
+
+    // Show SG rules before change
+    try {
+      const sgBefore = await describeSecurityGroup(securityGroupId, config.region);
+      console.log(`Security group inbound (before): ${JSON.stringify(sgBefore.IpPermissions, null, 2)}`);
+    } catch (err) {
+      console.log(`Could not describe security group before changes: ${err}`);
+    }
+
+    // Ensure SSH ingress
     await ensureSshIngress(securityGroupId, config.region);
-    await ensureSecurityGroupAttached(config.instanceId, securityGroupId, config.region);
-    console.log("Security group checked/updated; try connecting again.");
+
+    // Show SG rules after change
+    try {
+      const sgAfter = await describeSecurityGroup(securityGroupId, config.region);
+      console.log(`Security group inbound (after): ${JSON.stringify(sgAfter.IpPermissions, null, 2)}`);
+    } catch (err) {
+      console.log(`Could not describe security group after changes: ${err}`);
+    }
+
+    // Ensure SG attached to instance and show diffs
+    const attachRes = await ensureSecurityGroupAttached(config.instanceId, securityGroupId, config.region);
+    console.log(`Instance security groups (before): ${attachRes.before.join(", ")}`);
+    console.log(`Instance security groups (after): ${attachRes.after.join(", ")}`);
+    if (attachRes.modifyError) {
+      console.log(`Error while attaching security group: ${attachRes.modifyError}`);
+    } else if (attachRes.modifyResult) {
+      console.log(`Attach command exitCode: ${attachRes.modifyResult.exitCode}`);
+    }
+
+    // Retry SSH with longer timeout and verboseness
+    console.log("Retrying SSH with longer timeout...");
+    const retry = await ssh(config.ip, "echo 'Hello, World!'", 15000);
+    if (retry.exitCode === 0) {
+      console.log("SSH succeeded on retry");
+    } else {
+      console.log(`SSH retry failed (exitCode=${retry.exitCode}). Check the logs above for where it failed.`);
+    }
   }
 });
 
@@ -73,6 +120,8 @@ program.command("start").action(async () => {
         const key = await $`aws ec2 create-key-pair --key-name ${id} --query 'KeyMaterial' --output text`.text();
         const keyFilePath = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
         fs.writeFileSync(keyFilePath, key);
+        fs.chmodSync(keyFilePath, 0o400);  // Set secure permissions
+        console.log("SSH key created with secure permissions (0400).");
         config.key = id;
         setConfig(config);
       }
