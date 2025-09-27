@@ -62,8 +62,8 @@ export const getUserIp = async () => {
   return ip.trim();
 }
 
-export const ssh = async (ip: string, command: string) => {
-  return await $`ssh -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
+export const ssh = async (ip: string, command: string, timeout: number = 10000) => {
+  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
 }
 
 // Helper: describe an instance

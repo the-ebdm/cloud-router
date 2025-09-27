@@ -39,8 +39,8 @@ program.command("status").action(async () => {
 
   console.log(`Checking configuration...`);
 
-  // Ping the ip
-  const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'");
+  // Connect to the instance
+  const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", 5000);
   if (exitCode !== 0) {
     console.log("IP address is not reachable, checking security group");
 
