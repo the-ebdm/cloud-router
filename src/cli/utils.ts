@@ -62,8 +62,8 @@ export const getUserIp = async () => {
   return ip.trim();
 }
 
-export const ssh = async (ip: string, command: string, timeout: number = 10000) => {
-  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow().quiet();
+export const ssh = async (ip: string, command: string, timeout: number = 30000) => {
+  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${ip} ${command}`.nothrow();
 }
 
 // Helper: describe an instance
@@ -139,6 +139,39 @@ export const ensureKeyPermissions = () => {
     fs.chmodSync(keyFilePath, 0o400);
     return true;
   }
-  console.log("SSH key permissions are correct.");
   return true;
 };
+
+export const checkTailscaleCli = async (config: any) => {
+  const tailscaleCli = await ssh(config.ip, "tailscale --version");
+  return tailscaleCli.exitCode === 0;
+}
+
+export const getTailscaleStatus = async (config: any) => {
+  return await ssh(config.ip, "tailscale status --json");
+}
+
+export const ensureTailscale = async (config: any) => {
+  if (!(await checkTailscaleCli(config))) {
+    console.log("Tailscale CLI is not installed; installing...");
+    const command = `curl -fsSL https://tailscale.com/install.sh | sh`
+    await ssh(config.ip, command);
+    console.log("Tailscale CLI installed successfully");
+  }
+
+  const status = await getTailscaleStatus(config);
+  if (status.Online) {
+    console.log("Tailscale is already running");
+    return;
+  }
+
+  console.log("Tailscale is not running, starting it");
+  await ssh(config.ip, `sudo tailscale up --auth-key=${config.tailscaleAuthKey}`);
+
+  const status2 = await getTailscaleStatus(config);
+  if (status2.Online) {
+    console.log("Tailscale started successfully");
+  } else {
+    console.log("Tailscale failed to start");
+  }
+}

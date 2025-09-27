@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale } from "./utils";
 
 program.command("status").action(async () => {
   const config = getConfig();
@@ -97,6 +97,11 @@ program.command("status").action(async () => {
       console.log(`SSH retry failed (exitCode=${retry.exitCode}). Check the logs above for where it failed.`);
     }
   }
+
+  // We can connect
+  // Next step is to check tailscale
+  // Install and configure if it's not already setup
+  await ensureTailscale(config);
 });
 
 program.command("start").action(async () => {
