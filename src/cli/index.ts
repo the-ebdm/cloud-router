@@ -230,43 +230,50 @@ program.command("destroy")
   .option("-a, --all", "Destroy all resources")
   .action(async (options) => {
     const config = getConfig();
-    if (config.instanceId === undefined) {
-      console.log("Instance ID not found, cannot destroy");
-      return;
-    }
 
-    // Delete instance
-    await $`aws ec2 terminate-instances --instance-ids ${config.instanceId}`.quiet();
+    if (config.instanceId) {
+      // Delete instance
+      await $`aws ec2 terminate-instances --instance-ids ${config.instanceId}`.quiet();
 
-    // Wait until the instance is deleted
-    let hasTerminated = false;
-    while (!hasTerminated) {
-      const instance = await describeInstance(config.instanceId, config.region);
-      if (instance.State.Name === "terminated") {
-        hasTerminated = true;
-      } else {
-        await new Promise((r) => setTimeout(r, 1000));
+      // Wait until the instance is deleted
+      let hasTerminated = false;
+      while (!hasTerminated) {
+        const instance = await describeInstance(config.instanceId, config.region);
+        if (instance.State.Name === "terminated") {
+          hasTerminated = true;
+        } else {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
       }
+
+      // Update config
+      config.instanceId = undefined;
+      config.ip = undefined;
     }
 
-    // Update config
-    config.instanceId = undefined;
-    config.ip = undefined;
-    setConfig(config);
-
-    // Delete security group
-    await $`aws ec2 delete-security-group --group-id ${config.securityGroupId}`.quiet();
-    config.securityGroupId = undefined;
+    if (config.securityGroupId) {
+      // Delete security group
+      await $`aws ec2 delete-security-group --group-id ${config.securityGroupId}`.quiet();
+      config.securityGroupId = undefined;
+    }
 
     // If all is specified, delete the VPC, subnet and key
     if (options.all) {
-      await $`aws ec2 delete-vpc --vpc-id ${config.vpcId}`.quiet();
-      await $`aws ec2 delete-subnet --subnet-id ${config.subnetId}`.quiet();
-      await $`aws ec2 delete-key-pair --key-name ${config.key}`.quiet();
-
-      config.vpcId = undefined;
-      config.subnetId = undefined;
-      config.key = undefined;
+      if (config.key) {
+        await $`aws ec2 delete-key-pair --key-name ${config.key}`.quiet();
+        config.key = undefined;
+        setConfig(config);
+      }
+      if (config.subnetId) {
+        await $`aws ec2 delete-subnet --subnet-id ${config.subnetId}`.quiet();
+        config.subnetId = undefined;
+        setConfig(config);
+      }
+      if (config.vpcId) {
+        await $`aws ec2 delete-vpc --vpc-id ${config.vpcId}`.quiet();
+        config.vpcId = undefined;
+        setConfig(config);
+      }
     }
   });
 
