@@ -95,6 +95,7 @@ program.command("status").action(async () => {
       console.log("SSH succeeded on retry");
     } else {
       console.log(`SSH retry failed (exitCode=${retry.exitCode}). Check the logs above for where it failed.`);
+      return;
     }
   }
 
@@ -209,5 +210,49 @@ program.command("start").action(async () => {
     }
   }
 });
+
+program.command("destroy")
+  .option("-a, --all", "Destroy all resources")
+  .action(async (options) => {
+    const config = getConfig();
+    if (config.instanceId === undefined) {
+      console.log("Instance ID not found, cannot destroy");
+      return;
+    }
+
+    // Delete instance
+    await $`aws ec2 terminate-instances --instance-ids ${config.instanceId}`.quiet();
+
+    // Wait until the instance is deleted
+    let hasTerminated = false;
+    while (!hasTerminated) {
+      const instance = await describeInstance(config.instanceId, config.region);
+      if (instance.State.Name === "terminated") {
+        hasTerminated = true;
+      } else {
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+
+    // Update config
+    config.instanceId = undefined;
+    config.ip = undefined;
+    setConfig(config);
+
+    // Delete security group
+    await $`aws ec2 delete-security-group --group-id ${config.securityGroupId}`.quiet();
+    config.securityGroupId = undefined;
+
+    // If all is specified, delete the VPC, subnet and key
+    if (options.all) {
+      await $`aws ec2 delete-vpc --vpc-id ${config.vpcId}`.quiet();
+      await $`aws ec2 delete-subnet --subnet-id ${config.subnetId}`.quiet();
+      await $`aws ec2 delete-key-pair --key-name ${config.key}`.quiet();
+
+      config.vpcId = undefined;
+      config.subnetId = undefined;
+      config.key = undefined;
+    }
+  });
 
 program.parse(process.argv);

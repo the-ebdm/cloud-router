@@ -35,7 +35,11 @@ export const getConfig = () => {
 };
 
 export const setConfig = (config: any) => {
-  fs.writeFileSync(getConfigFile(), JSON.stringify(config, null, 2));
+  let parsedKeys: any = {};
+  for (const key in config) {
+    parsedKeys[key] = config[key]?.trim();
+  }
+  fs.writeFileSync(getConfigFile(), JSON.stringify(parsedKeys, null, 2));
 };
 
 export const checkAWSCli = async () => {
