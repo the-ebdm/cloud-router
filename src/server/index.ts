@@ -1,6 +1,7 @@
 import express from "express";
-import db, { getApiKeyByKey } from "@/lib/database";
+import cors from "cors";
 
+import db, { getApiKeyByKey } from "@/lib/database";
 import { runMigrations } from "@/lib/database/migration";
 
 import domainsRouter from "./routers/domains";
@@ -19,6 +20,7 @@ await runMigrations(db);
 const app = express();
 
 app.use(express.json());
+app.use(cors()); // Enables CORS for all routes
 
 // API Routes - /api/v1/{entity}
 const apiRouter = express.Router();
