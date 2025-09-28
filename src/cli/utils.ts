@@ -2,6 +2,7 @@ import { program } from "commander";
 import path from "path";
 import fs from "fs";
 import { $ } from "bun";
+import os from "os";
 
 export const defaultConfig = {
   provider: "aws",
@@ -75,10 +76,11 @@ export type SSHOptions = {
   timeout?: number
   showOutput?: boolean
   verbose?: boolean
+  cwd?: string
 }
 
 export const ssh = async (ip: string, command: string, options: SSHOptions = {}) => {
-  const { timeout = 10000, showOutput = false, verbose = false } = options;
+  const { timeout = 10000, showOutput = false, verbose = false, cwd = '/home/ec2-user/cloud-router' } = options;
   const config = getConfig();
   const targetIp = config.tailscaleHostname || ip;  // Prefer Tailscale if available
   if (showOutput) {
@@ -90,6 +92,71 @@ export const ssh = async (ip: string, command: string, options: SSHOptions = {})
   }
   return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.quiet().nothrow();
 };
+
+// Create a long-lived SSH master connection using OpenSSH ControlMaster multiplexing
+export const createSSHSession = async (config: any, options: { controlPersist?: number, timeout?: number, workDir?: string } = {}) => {
+  const { controlPersist = 600, timeout = 10_000, workDir = '/home/ec2-user/cloud-router' } = options;
+  const targetIp = config.tailscaleHostname || config.ip;
+  const keyFile = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
+
+  // Ensure control socket path
+  const socketName = `cm-${String(targetIp).replace(/[^a-zA-Z0-9]/g, "-")}.sock`;
+  const socketPath = path.join(process.env.HOME!, ".cloud-router", socketName);
+
+  // Start master connection (background, no command)
+  const masterArgs = `-o ControlMaster=yes -o ControlPath=${socketPath} -o ControlPersist=${controlPersist}`;
+  const startRes = await $`ssh ${masterArgs} -o ConnectTimeout=${Math.ceil(timeout / 1000)} -i ${keyFile} -fN ec2-user@${targetIp}`.nothrow();
+
+  // Capture login shell environment once so we can reuse PATH and other important vars
+  let envExports = "";
+  try {
+    const envRes = await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(timeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash --login -c 'env -0'`.quiet().nothrow();
+    const raw = envRes.stdout || envRes.text || "";
+    if (raw) {
+      const parts = raw.split('\0');
+      const exports: string[] = [];
+      for (const p of parts) {
+        if (!p) continue;
+        const eq = p.indexOf('=');
+        if (eq === -1) continue;
+        const key = p.slice(0, eq);
+        const val = p.slice(eq + 1);
+        // escape single quotes
+        const safe = val.replace(/'/g, "'\\''");
+        exports.push(`export ${key}='${safe}'`);
+      }
+      if (exports.length > 0) {
+        envExports = exports.join(' && ') + ' && ';
+      }
+    }
+  } catch (e) {
+    // best-effort; if we can't fetch env, proceed without it
+    envExports = '';
+  }
+
+  const run = async (command: string, opts: SSHOptions = {}) => {
+    const { timeout: cmdTimeout = timeout, showOutput = false, verbose = false, cwd = workDir } = opts;
+    // default to running inside the configured workDir so callers don't need to 'cd' repeatedly
+    const fullCommand = `${envExports} cd ${cwd} && ${command}`;
+    console.log(`Running command: ${fullCommand}`);
+    if (showOutput) {
+      if (verbose) {
+        return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.nothrow();
+      }
+      return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.nothrow();
+    }
+    return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.quiet().nothrow();
+  };
+
+  const close = async () => {
+    try {
+      await $`ssh -S ${socketPath} -O exit -i ${keyFile} ec2-user@${targetIp}`.nothrow();
+    } catch (_) { }
+    try { fs.unlinkSync(socketPath); } catch (_) { }
+  };
+
+  return { startRes, run, close, socketPath };
+}
 
 // Helper: describe an instance
 export const describeInstance = async (instanceId: string, region: string) => {
@@ -256,27 +323,23 @@ export const ensureTailscale = async (config: any) => {
   }
 };
 
-export const ensureGit = async (config: any) => {
-  const gitRes = await ssh(config.ip, "git --version");
+export const ensureGit = async (config: any, runner?: (cmd: string, opts?: SSHOptions) => Promise<any>) => {
+  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, o));
+  const gitRes = await run("git --version");
   if (gitRes.exitCode !== 0) {
     console.log("Git is not installed; installing...");
-    await ssh(config.ip, "sudo yum install -y git", {
-      showOutput: true
-    });
+    await run("sudo yum install -y git", { showOutput: true });
   }
   console.log("Git installed successfully");
 }
 
-export const ensureBun = async (config: any) => {
+export const ensureBun = async (config: any, runner?: (cmd: string, opts?: SSHOptions) => Promise<any>) => {
+  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, o));
   const bunPath = "/home/ec2-user/.bun/bin/bun";
-  const bunRes = await ssh(config.ip, `${bunPath} --version`, {
-    showOutput: true
-  });
+  const bunRes = await run(`${bunPath} --version`, { showOutput: true });
   if (bunRes.exitCode !== 0) {
     console.log("Bun is not installed; installing...");
-    await ssh(config.ip, "curl -fsSL https://bun.sh/install | bash", {
-      showOutput: true
-    });
+    await run("curl -fsSL https://bun.sh/install | bash", { showOutput: true });
     console.log("Bun installed successfully");
   }
   return bunPath;

@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun, createSSHSession } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
@@ -36,6 +36,8 @@ program.command("status").action(async () => {
     return;
   }
 
+  let session: any = null;
+
   const canPing = await canPingCloudRouter(config);
   if (!canPing) {
     // Check configuration
@@ -59,11 +61,20 @@ program.command("status").action(async () => {
 
     config = getConfig();  // Refresh config
 
+    // Create a master SSH session and reuse it for subsequent commands
+    try {
+      session = await createSSHSession(config, { controlPersist: 600, timeout: 10000 });
+    } catch (e) {
+      console.log(`Failed to start SSH master session: ${e}. Falling back to single-shot SSH.`);
+    }
+
+    const runRemote = session ? session.run : (cmd: string, opts?: any) => ssh(config.ip, cmd, opts);
+
     // Connect using preferred IP (ssh function handles fallback)
-    const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", {
+    const { exitCode } = await runRemote("echo 'Hello, World!'", {
       timeout: 5000,
       showOutput: true
-    });  // ssh will use tailscaleIp if avail
+    });
     if (exitCode !== 0) {
       console.log("IP address is not reachable, starting verbose diagnostics...");
 
@@ -141,31 +152,52 @@ program.command("status").action(async () => {
   config.status = "reachable";
   setConfig(config);
 
-  // Does it have the source?
-  const sourceCode = await ssh(config.ip, "ls -la /home/ec2-user/cloud-router");
-  if (sourceCode.exitCode !== 0) {
-    await ensureGit(config);
-    console.log("Source code not found, installing...");
-    await ssh(config.ip, "git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router", {
+  if (session === null) {
+    session = await createSSHSession(config, { controlPersist: 600, timeout: 10000 });
+  }
+  const run = session.run;
+
+  // Fix source code check in status command
+  const sourceCheck = await run("test -d /home/ec2-user/cloud-router/.git");
+  if (sourceCheck.exitCode !== 0) {
+    console.log("Git repository not found, cloning...");
+    await ensureGit(config, run);
+    await run("rm -rf /home/ec2-user/cloud-router", { showOutput: true });
+    await run("git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router", {
       showOutput: true
     });
   }
 
   console.log("Source code found");
-  // Git pull
-  await ssh(config.ip, "cd /home/ec2-user/cloud-router && git pull", {
+
+  await run("ls -la", {
+    showOutput: true,
+  });
+
+  console.log("Pulling source code...");
+  // Git pull (run in session workDir)
+  await run("git pull", {
     showOutput: true
   });
 
-  const bunPath = await ensureBun(config);
+  const bunPath = await ensureBun(config, run);
 
-  await ssh(config.ip, `cd /home/ec2-user/cloud-router && ${bunPath} install`, {
+  await run(`${bunPath} install`, {
     showOutput: true
   });
 
-  await ssh(config.ip, `cd /home/ec2-user/cloud-router && ${bunPath} run build`, {
+  await run(`${bunPath} run build`, {
     showOutput: true
   });
+
+  // Close SSH master session if we started one
+  try {
+    if (session && session.close) {
+      await session.close();
+    }
+  } catch (e) {
+    console.log(`Failed to close SSH session: ${e}`);
+  }
 });
 
 program.command("start").action(async () => {
@@ -385,6 +417,54 @@ program.command("generate-key")
       console.log(`API key id: ${id}`);
     } finally {
       try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { }
+    }
+  });
+
+program
+  .command("exec")
+  .description("Execute a command on the remote cloud-router instance")
+  .argument("<command>", "The command to execute on the remote instance")
+  .option("-v, --verbose", "Show verbose SSH output")
+  .action(async (cmd: string, options) => {
+    const config = getConfig();
+    if (config.status !== "reachable") {
+      console.log("Cloud Router is not reachable. Run `cloud-router status` first to set it up.");
+      return;
+    }
+
+    if (!config.ip) {
+      console.error("No IP found in config.");
+      process.exit(1);
+    }
+
+    const keyOk = ensureKeyPermissions();  // Note: ensureKeyPermissions is now exported and synchronous
+    if (!keyOk) {
+      console.error("SSH key issue; fix with: chmod 400 ~/.cloud-router/cloud-router.pem");
+      process.exit(1);
+    }
+
+    // Use direct SSH with cd to work dir and the command
+    const workDir = "/home/ec2-user/cloud-router";
+    const fullCmd = `cd ${workDir} && ${cmd}`;
+
+    const sshOpts: any = {
+      showOutput: true,
+      timeout: 30000,  // 30s default
+    };
+    if (options.verbose) {
+      sshOpts.verbose = true;
+    }
+
+    console.log(`Running remote command: ${cmd}`);
+    const result = await ssh(config.ip, fullCmd, sshOpts);
+
+    if (result.exitCode !== 0) {
+      console.log(`Command failed with exit code ${result.exitCode}`);
+      if (result.stderr) {
+        console.error(`Error output: ${result.stderr}`);
+      }
+    } else {
+      console.log("Command completed successfully.");
     }
   });
 
