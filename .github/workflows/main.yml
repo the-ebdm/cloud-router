@@ -51,4 +51,5 @@ jobs:
 
           If the last commit was a documentation update, you can probably skip the documentation update but do check in case there are any gaps in the previous agent's work.
 
-          Focus on clarity, completeness, and making the docs the best possible reference for users and developers."
+          Focus on clarity, completeness, and making the docs the best possible reference for users and developers." \
+          --force --model "$MODEL" --output-format=text
