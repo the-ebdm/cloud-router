@@ -470,9 +470,6 @@ WantedBy=multi-user.target`;
 
   const currentHash = checkHashRes.stdout?.toString().trim();
 
-  console.log("Current hash:", currentHash);
-  console.log("Expected hash:", expectedHash);
-
   if (currentHash && currentHash !== 'missing' && currentHash === expectedHash) {
     return { exists: true, hashMatch: true };
   }
