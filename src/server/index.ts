@@ -27,7 +27,7 @@ const apiRouter = express.Router();
 apiRouter.get('/status', async (req, res) => {
   const gitHash = await $`git rev-parse HEAD`.text();
   const shortHash = gitHash.slice(0, 7);
-  res.send({
+  res.json({
     status: "OK",
     deployedVersion: shortHash,
   });
