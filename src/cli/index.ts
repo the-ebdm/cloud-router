@@ -59,14 +59,11 @@ program.command("status").action(async () => {
 
     config = getConfig();  // Refresh config
 
-    // Check Tailscale if not set
-    if (!config.tailscaleIp && status === "running") {
-      console.log("Tailscale IP not set; configuring...");
-      await ensureTailscale(config);
-    }
-
     // Connect using preferred IP (ssh function handles fallback)
-    const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", 5000);  // ssh will use tailscaleIp if avail
+    const { exitCode } = await ssh(config.ip, "echo 'Hello, World!'", {
+      timeout: 5000,
+      showOutput: true
+    });  // ssh will use tailscaleIp if avail
     if (exitCode !== 0) {
       console.log("IP address is not reachable, starting verbose diagnostics...");
 
@@ -80,7 +77,7 @@ program.command("status").action(async () => {
       // Show SG rules before change
       try {
         const sgBefore = await describeSecurityGroup(securityGroupId, config.region);
-        console.log(`Security group inbound (before): ${JSON.stringify(sgBefore.IpPermissions, null, 2)}`);
+        console.log(`Security group inbound (before): ${JSON.stringify(sgBefore.IpPermissions)}`);
       } catch (err) {
         console.log(`Could not describe security group before changes: ${err}`);
       }
@@ -91,7 +88,7 @@ program.command("status").action(async () => {
       // Show SG rules after change
       try {
         const sgAfter = await describeSecurityGroup(securityGroupId, config.region);
-        console.log(`Security group inbound (after): ${JSON.stringify(sgAfter.IpPermissions, null, 2)}`);
+        console.log(`Security group inbound (after): ${JSON.stringify(sgAfter.IpPermissions)}`);
       } catch (err) {
         console.log(`Could not describe security group after changes: ${err}`);
       }
@@ -108,7 +105,10 @@ program.command("status").action(async () => {
 
       // Retry SSH with longer timeout and verboseness
       console.log("Retrying SSH with longer timeout...");
-      const retry = await ssh(config.ip, "echo 'Hello, World!'", 15000);
+      const retry = await ssh(config.ip, "echo 'Hello, World!'", {
+        timeout: 15000,
+        showOutput: true
+      });
       if (retry.exitCode === 0) {
         console.log("SSH succeeded on retry");
       } else {
@@ -120,7 +120,11 @@ program.command("status").action(async () => {
     // We can connect
     // Next step is to check tailscale
     // Install and configure if it's not already setup
-    await ensureTailscale(config);
+    // Check Tailscale if not set
+    if (!config.tailscaleIp && status === "running") {
+      console.log("Tailscale IP not set; configuring...");
+      await ensureTailscale(config);
+    }
   }
 
   console.log("Cloud Router is reachable");
