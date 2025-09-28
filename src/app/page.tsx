@@ -64,7 +64,9 @@ export default function Dashboard() {
       }
     };
 
-    fetchStats();
+    if (stats === null) {
+      fetchStats();
+    }
   }, [apiKey, apiRequest]);
 
   if (!apiKey) {
