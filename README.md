@@ -6,8 +6,8 @@ I have lots of services running on my home network that I want to be able to acc
 
 ## Feature Set
 
-- [ ] CLI tool to configure the router
-- [ ] Connect to Tailscale
+- [x] CLI tool to configure the router
+- [x] Connect to Tailscale
 - [ ] Dashboard for viewing and configuring domains and routes
 - [ ] DNS will be handled by Route53, the service will create hosted zones if needs be
 - [ ] Automatically provision certificates from Let's Encrypt
