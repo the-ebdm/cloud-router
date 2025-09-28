@@ -1,6 +1,7 @@
 import express from "express";
 import { createDomain, getDomainById, getAllDomains, updateDomain, deleteDomain } from "@/lib/database";
 import { getHostedZoneId } from "../utils";
+import { $ } from "bun";
 import { logger } from "@/lib/logger";
 
 const domainsRouter = express.Router();
@@ -50,6 +51,29 @@ domainsRouter.get('/:id', (req, res) => {
     return res.status(404).json({ error: 'Domain not found' });
   }
   res.json(domain);
+});
+
+// New endpoint: list Route53 records for a domain by its DB id
+domainsRouter.get('/:id/records', async (req, res) => {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid ID' });
+  const domain = getDomainById(id);
+  if (!domain) return res.status(404).json({ error: 'Domain not found' });
+
+  // If we have a hosted_zone_id stored use it, otherwise attempt lookup
+  let hostedZoneId = domain.hosted_zone_id;
+  if (!hostedZoneId) {
+    hostedZoneId = await getHostedZoneId(domain.name).catch(() => null);
+    if (!hostedZoneId) return res.status(404).json({ error: 'Hosted zone not found or permissions missing' });
+  }
+
+  try {
+    const records = await $`aws route53 list-resource-record-sets --hosted-zone-id ${hostedZoneId} --output json`.json();
+    // return the RecordSets array
+    return res.json(records.ResourceRecordSets || []);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to list records', details: err.message });
+  }
 });
 
 domainsRouter.get('/', (req, res) => {
