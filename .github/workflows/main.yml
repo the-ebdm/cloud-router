@@ -24,6 +24,9 @@ jobs:
           Workflow:
           1. Analyze recent commits and code changes since the last documentation update
           2. Identify all files that need documentation updates (README.md, docs/, inline comments, API docs, etc.)
+            - Identify any new documentation files that should be created
+            - Identify any stale documentation files that should be deleted
+            - Identify any dead code that should be removed
           3. Generate clear, comprehensive updates that reflect the current codebase
           4. Ensure documentation follows project style and structure
           5. If meaningful changes are needed, commit changes with descriptive messages like 'docs: update documentation for [feature/change]'
