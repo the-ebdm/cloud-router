@@ -1,6 +1,12 @@
 "use client";
 
-import { createContext, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
 
 interface ApiContextType {
   apiKey: string;
@@ -11,10 +17,14 @@ interface ApiContextType {
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
   // TODO: Configure this properly based on environment
   const baseUrl =
     process.env.NEXT_PUBLIC_API_URL || "http://cloud-router:3000/api/v1";
+
+  useEffect(() => {
+    localStorage.setItem("apiKey", apiKey);
+  }, [apiKey]);
 
   return (
     <ApiContext.Provider value={{ apiKey, setApiKey, baseUrl }}>
