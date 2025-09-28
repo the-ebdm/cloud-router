@@ -82,8 +82,8 @@ export const ssh = async (ip: string, command: string, options: SSHOptions = {})
   const config = getConfig();
   const targetIp = config.tailscaleHostname || ip;  // Prefer Tailscale if available
   if (showOutput) {
-    console.log(`SSHing to ${targetIp} (using ${config.tailscaleHostname ? 'Tailscale' : 'public'} IP)`);
     if (verbose) {
+      console.log(`SSHing to ${targetIp} (using ${config.tailscaleHostname ? 'Tailscale' : 'public'} IP)`);
       return await $`ssh -vvv -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
     }
     return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
@@ -265,6 +265,21 @@ export const ensureGit = async (config: any) => {
     });
   }
   console.log("Git installed successfully");
+}
+
+export const ensureBun = async (config: any) => {
+  const bunPath = "/home/ec2-user/.bun/bin/bun";
+  const bunRes = await ssh(config.ip, `${bunPath} --version`, {
+    showOutput: true
+  });
+  if (bunRes.exitCode !== 0) {
+    console.log("Bun is not installed; installing...");
+    await ssh(config.ip, "curl -fsSL https://bun.sh/install | bash", {
+      showOutput: true
+    });
+    console.log("Bun installed successfully");
+  }
+  return bunPath;
 }
 
 export const canPingCloudRouter = async (config: any) => {

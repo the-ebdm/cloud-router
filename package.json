@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev:app": "next dev --turbopack",
-    "build": "next build --turbopack",
+    "build:app": "next build --turbopack",
+    "build:server": "bun build src/server/index.ts --compile --outfile dist/server",
     "start": "next start",
     "lint": "eslint"
   },
