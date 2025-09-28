@@ -46,7 +46,7 @@ export default function DomainsPage() {
   const fetchDomains = async () => {
     try {
       const data = await apiRequest("/domains");
-      setDomains(data);
+      setDomains(data || []);
     } catch (error) {
       console.error("Failed to fetch domains:", error);
     } finally {
