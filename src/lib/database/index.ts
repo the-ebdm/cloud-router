@@ -455,6 +455,12 @@ export const getAllApiKeys = (): ApiKey[] => {
   return stmt.all() as ApiKey[];
 };
 
+// Lookup API key by the key string
+export const getApiKeyByKey = (key: string): ApiKey | undefined => {
+  const stmt = db.prepare('SELECT * FROM api_keys WHERE key = ?');
+  return stmt.get(key) as ApiKey | undefined;
+};
+
 export const updateApiKey = (id: number, data: Partial<Omit<ApiKey, 'id' | 'created_at'>>): boolean => {
   const timestamp = getCurrentTimestamp();
   const updates = [];

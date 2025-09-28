@@ -1,5 +1,5 @@
 import express from "express";
-import db from "@/lib/database";
+import db, { getApiKeyByKey } from "@/lib/database";
 
 import { runMigrations } from "@/lib/database/migration";
 
@@ -21,15 +21,26 @@ app.use(express.json());
 // API Routes - /api/v1/{entity}
 const apiRouter = express.Router();
 
-// Authentication middleware
-apiRouter.use((req, res, next) => {
-  // TODO: Add authentication
-  next();
-});
-
 // Status endpoint
 apiRouter.get('/status', (req, res) => {
   res.send("OK");
+});
+
+// API-key authentication middleware
+apiRouter.use((req, res, next) => {
+  const authHeader = req.header('authorization') || req.header('Authorization');
+  if (!authHeader) return res.status(401).json({ error: 'Missing Authorization header' });
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return res.status(400).json({ error: 'Invalid Authorization header format' });
+  }
+  const apiKey = parts[1];
+  const keyRecord = getApiKeyByKey(apiKey);
+  if (!keyRecord) return res.status(401).json({ error: 'Invalid API key' });
+  if (keyRecord.revoked_at) return res.status(403).json({ error: 'API key revoked' });
+  // Attach key info to request for handlers
+  (req as any).apiKey = keyRecord;
+  next();
 });
 
 apiRouter.use('/domains', domainsRouter);
