@@ -385,7 +385,7 @@ export const findRemoteDatabasePath = async (config: any) => {
 }
 
 export const createSystemdService = async (config: any) => {
-  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
+  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
 
   const serviceContent = `[Unit]
 Description=Cloud Router Server
@@ -402,8 +402,8 @@ Restart=always
 RestartSec=5
 MemoryLimit=400M
 CPUQuota=80%
-StandardOutput=append:/home/ec2-user/cloud-router/logs/cloud-router.log
-StandardError=append:/home/ec2-user/cloud-router/logs/cloud-router.log
+StandardOutput=/home/ec2-user/cloud-router/logs/cloud-router.log
+StandardError=/home/ec2-user/cloud-router/logs/cloud-router.log
 
 [Install]
 WantedBy=multi-user.target`;
@@ -424,14 +424,18 @@ WantedBy=multi-user.target`;
   }
 
   // Create or update the service file
-  const createCmd = `sudo tee /etc/systemd/system/cloud-router.service > /dev/null << 'EOF'
-${serviceContent}
-EOF
-sudo systemctl daemon-reload`;
+  Bun.write("cloud-router.service", serviceContent);
+  await scpUpload(config, "cloud-router.service", "cloud-router.service");
 
-  const createRes = await run(createCmd);
+  const move = await run(`sudo mv cloud-router.service /etc/systemd/system/cloud-router.service`);
+  if (move.exitCode !== 0) {
+    console.log("Failed to move service file.");
+  }
 
-  if (createRes.exitCode === 0) {
+  fs.unlinkSync("cloud-router.service");
+  const reload = await run(`sudo systemctl daemon-reload`);
+
+  if (reload.exitCode === 0) {
     if (currentHash && currentHash !== 'missing') {
       console.log("Systemd service updated (hash mismatch) and reloaded.");
     } else {
@@ -441,7 +445,7 @@ sudo systemctl daemon-reload`;
     console.log("Failed to create/update systemd service.");
   }
 
-  return { ...createRes, hashMatch: false };
+  return { ...move, hashMatch: false };
 };
 
 export const enableSystemdService = async (config: any) => {
