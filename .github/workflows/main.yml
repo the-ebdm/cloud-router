@@ -28,7 +28,6 @@ jobs:
           MODEL: grok-4-fast-reasoning
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH_PREFIX: docs
         run: |
           cursor-agent -p "You are an expert documentation engineer with full access to git and GitHub CLI. 
 
