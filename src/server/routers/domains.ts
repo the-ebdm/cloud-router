@@ -1,10 +1,18 @@
 import express from "express";
 import { createDomain, getDomainById, getAllDomains, updateDomain, deleteDomain } from "@/lib/database";
+import { getHostedZoneId } from "../utils";
 
 const domainsRouter = express.Router();
 
-domainsRouter.post('/', (req, res) => {
+domainsRouter.post('/', async (req, res) => {
   try {
+    // Find hosted zone ID from domain name
+    const hostedZoneId = await getHostedZoneId(req.body.name);
+    if (!hostedZoneId) {
+      return res.status(400).json({ error: 'Hosted zone ID not found' });
+    }
+    req.body.hosted_zone_id = hostedZoneId;
+
     const id = createDomain(req.body);
     res.status(201).json({ id });
   } catch (error) {
