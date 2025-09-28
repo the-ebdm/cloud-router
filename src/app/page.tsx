@@ -1,103 +1,196 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+import DashboardLayout from "@/components/dashboard-layout";
+import { useApi, useApiRequest } from "@/app/api-context";
+import { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+interface Stats {
+  domains: number;
+  routes: number;
+  services: number;
+  healthChecks: number;
+  certificates: number;
+  apiKeys: number;
+  requests: number;
+}
+
+export default function Dashboard() {
+  const { apiKey } = useApi();
+  const apiRequest = useApiRequest();
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!apiKey) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchStats = async () => {
+      try {
+        const [
+          domains,
+          routes,
+          services,
+          healthChecks,
+          certificates,
+          apiKeys,
+          requests,
+        ] = await Promise.all([
+          apiRequest("/domains"),
+          apiRequest("/routes"),
+          apiRequest("/services"),
+          apiRequest("/health_checks"),
+          apiRequest("/certificates"),
+          apiRequest("/api_keys"),
+          apiRequest("/requests"),
+        ]);
+
+        setStats({
+          domains: Array.isArray(domains) ? domains.length : 0,
+          routes: Array.isArray(routes) ? routes.length : 0,
+          services: Array.isArray(services) ? services.length : 0,
+          healthChecks: Array.isArray(healthChecks) ? healthChecks.length : 0,
+          certificates: Array.isArray(certificates) ? certificates.length : 0,
+          apiKeys: Array.isArray(apiKeys) ? apiKeys.length : 0,
+          requests: Array.isArray(requests) ? requests.length : 0,
+        });
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [apiKey, apiRequest]);
+
+  if (!apiKey) {
+    return (
+      <DashboardLayout>
+        <div className="text-center py-12">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Welcome to Cloud Router
+          </h1>
+          <p className="text-gray-600 mb-8">
+            Please enter your API key in the sidebar to get started.
+          </p>
+          <div className="text-sm text-gray-500">
+            Use the CLI to create an API key if you don't have one yet.
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Dashboard</h1>
+
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <StatCard title="Domains" value={stats?.domains || 0} icon="🌐" />
+            <StatCard title="Routes" value={stats?.routes || 0} icon="🛣️" />
+            <StatCard title="Services" value={stats?.services || 0} icon="⚙️" />
+            <StatCard
+              title="Health Checks"
+              value={stats?.healthChecks || 0}
+              icon="❤️"
+            />
+            <StatCard
+              title="Certificates"
+              value={stats?.certificates || 0}
+              icon="🔒"
+            />
+            <StatCard title="API Keys" value={stats?.apiKeys || 0} icon="🔑" />
+            <StatCard title="Requests" value={stats?.requests || 0} icon="📊" />
+          </div>
+        )}
+
+        <div className="mt-12">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <ActionCard
+              title="Add Domain"
+              description="Configure a new domain for routing"
+              href="/domains"
+              action="Create"
+            />
+            <ActionCard
+              title="Add Service"
+              description="Register a new backend service"
+              href="/services"
+              action="Create"
+            />
+            <ActionCard
+              title="Add Route"
+              description="Set up routing rules"
+              href="/routes"
+              action="Create"
+            />
+          </div>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  icon,
+}: {
+  title: string;
+  value: number;
+  icon: string;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center">
+          <div className="text-2xl mr-4">{icon}</div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <p className="text-3xl font-bold">{value}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ActionCard({
+  title,
+  description,
+  href,
+  action,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  action: string;
+}) {
+  return (
+    <Card className="hover:shadow-md transition-shadow">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-muted-foreground mb-4">{description}</p>
+        <Button asChild>
+          <a href={href}>{action}</a>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

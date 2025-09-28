@@ -1,6 +1,6 @@
-import { $ } from "bun";
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 
-export const getTailscaleStatus = async () => {
-  const status = await $`tailscale status --json`.json();
-  return status;
-};
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
