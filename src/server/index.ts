@@ -12,6 +12,8 @@ import routesRouter from "./routers/routes";
 import requestsRouter from "./routers/requests";
 import apiKeysRouter from "./routers/apiKeys";
 
+import { $ } from "bun";
+
 await runMigrations(db);
 
 const app = express();
@@ -22,8 +24,13 @@ app.use(express.json());
 const apiRouter = express.Router();
 
 // Status endpoint
-apiRouter.get('/status', (req, res) => {
-  res.send("OK");
+apiRouter.get('/status', async (req, res) => {
+  const gitHash = await $`git rev-parse HEAD`.text();
+  const shortHash = gitHash.slice(0, 7);
+  res.send({
+    status: "OK",
+    deployedVersion: shortHash,
+  });
 });
 
 // API-key authentication middleware

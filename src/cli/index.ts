@@ -107,6 +107,11 @@ program.command("status").action(async () => {
     config.serverStatus = "stopped";
     setConfig({ ...config, status: "running" });  // Instance running, but server not
   }
+
+  console.log("Cloud Router status:");
+  const response = await fetch(`http://cloud-router:3000/api/v1/status`);
+  const data = await response.json();
+  console.log(data);
 });
 
 program.command("start").action(async () => {
