@@ -14,13 +14,18 @@ import requestsRouter from "./routers/requests";
 import apiKeysRouter from "./routers/apiKeys";
 
 import { $ } from "bun";
-
-await runMigrations(db);
+import { logger } from "@/lib/logger";
 
 const app = express();
 
 app.use(express.json());
 app.use(cors()); // Enables CORS for all routes
+
+// Request logging middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path} - Body:`, req.body);
+  next();
+});
 
 // API Routes - /api/v1/{entity}
 const apiRouter = express.Router();
@@ -33,22 +38,34 @@ apiRouter.get('/status', async (req, res) => {
     status: "OK",
     deployedVersion: shortHash,
   });
+  logger.info('Status request served');
 });
 
 // API-key authentication middleware
 apiRouter.use((req, res, next) => {
   const authHeader = req.header('authorization') || req.header('Authorization');
-  if (!authHeader) return res.status(401).json({ error: 'Missing Authorization header' });
+  if (!authHeader) {
+    logger.info('Missing Authorization header');
+    return res.status(401).json({ error: 'Missing Authorization header' });
+  }
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    logger.info('Invalid Authorization header format');
     return res.status(400).json({ error: 'Invalid Authorization header format' });
   }
   const apiKey = parts[1];
   const keyRecord = getApiKeyByKey(apiKey);
-  if (!keyRecord) return res.status(401).json({ error: 'Invalid API key' });
-  if (keyRecord.revoked_at) return res.status(403).json({ error: 'API key revoked' });
+  if (!keyRecord) {
+    logger.info('Invalid API key');
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  if (keyRecord.revoked_at) {
+    logger.info('API key revoked');
+    return res.status(403).json({ error: 'API key revoked' });
+  }
   // Attach key info to request for handlers
   (req as any).apiKey = keyRecord;
+  logger.info(`Authenticated request for key ID: ${keyRecord.id}`);
   next();
 });
 
@@ -63,6 +80,13 @@ apiRouter.use('/api_keys', apiKeysRouter);
 
 app.use('/api/v1', apiRouter);
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log("Server is running on port " + (process.env.PORT || 3000));
+// Global error handler
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error('Unhandled error:', err.message);
+  res.status(500).json({ error: 'Internal server error', details: err.message });
+});
+
+const port = process.env.PORT || 3001; // Changed to 3001 to avoid conflict with Next.js
+app.listen(port, () => {
+  logger.info(`Server is running on port ${port}`);
 });

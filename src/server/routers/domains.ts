@@ -4,19 +4,21 @@ import { getHostedZoneId } from "../utils";
 
 const domainsRouter = express.Router();
 
-domainsRouter.post('/', async (req, res) => {
+domainsRouter.post('/', (req, res) => {
   try {
-    // Find hosted zone ID from domain name
-    const hostedZoneId = await getHostedZoneId(req.body.name);
-    if (!hostedZoneId) {
-      return res.status(400).json({ error: 'Hosted zone ID not found' });
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      log('Validation error: Invalid domain name', { name });
+      return res.status(400).json({ error: 'Domain name is required and must be a non-empty string' });
     }
-    req.body.hosted_zone_id = hostedZoneId;
 
-    const id = createDomain(req.body);
+    log('Attempting to create domain:', { name: name.trim() });
+    const id = createDomain({ name: name.trim() });
+    log(`Domain created successfully with ID: ${id}`);
     res.status(201).json({ id });
   } catch (error) {
-    res.status(400).json({ error: 'Failed to create domain' });
+    log('Domain creation failed:', { error: error.message, stack: error.stack });
+    res.status(400).json({ error: 'Failed to create domain', details: error.message });
   }
 });
 
@@ -60,5 +62,11 @@ domainsRouter.delete('/:id', (req, res) => {
   }
   res.json({ message: 'Domain deleted' });
 });
+
+// Import log from index.ts or define here
+const log = (message: string, data?: any) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[DOMAINS] [${timestamp}] ${message}`, data || '');
+};
 
 export default domainsRouter;
