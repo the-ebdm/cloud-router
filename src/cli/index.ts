@@ -3,7 +3,10 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath } from "./utils";
+import crypto from "crypto";
+import { Database } from "bun:sqlite";
+import os from "os";
 
 program.command("status").action(async () => {
   let config = getConfig();
@@ -274,6 +277,65 @@ program.command("destroy")
         config.vpcId = undefined;
         setConfig(config);
       }
+    }
+  });
+
+program.command("generate-key")
+  .description("Generate a new API key on the remote cloud-router and print it")
+  .action(async () => {
+    const config = getConfig();
+    if (!config.ip) {
+      console.error('No cloud-router IP found in config. Run `cloud-router start` first.');
+      process.exit(1);
+    }
+
+    // Ensure SSH key exists and permissions are correct
+    if (!ensureKeyPermissions()) {
+      console.error('SSH key permissions issue; fix and retry.');
+      process.exit(1);
+    }
+
+    // Find remote DB
+    const remoteDbPath = await findRemoteDatabasePath(config);
+    if (!remoteDbPath) {
+      console.error('Could not find remote database file on the server');
+      process.exit(1);
+    }
+
+    // Create local temporary directory
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cloud-router-'));
+    const localDbPath = path.join(tmpDir, 'database.sqlite');
+
+    console.log(`Downloading remote DB ${remoteDbPath} to ${localDbPath}...`);
+    const dl = await scpDownload(config, remoteDbPath, localDbPath);
+    if (dl.exitCode !== 0) {
+      console.error(`Failed to download DB: exitCode=${dl.exitCode}`);
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      process.exit(1);
+    }
+
+    try {
+      // Open DB and insert API key
+      const db = new Database(localDbPath);
+      const key = crypto.randomBytes(32).toString('hex');
+      const timestamp = new Date().toISOString();
+      const stmt = db.prepare('INSERT INTO api_keys (key, created_at, updated_at) VALUES (?, ?, ?)');
+      const result = stmt.run(key, timestamp, timestamp);
+      const id = result.lastInsertRowid as number;
+      // Close DB (Bun sqlite does not require explicit close but we'll free variable)
+      // Upload modified DB back to remote
+      console.log(`Uploading modified DB back to ${remoteDbPath}...`);
+      const up = await scpUpload(config, localDbPath, remoteDbPath);
+      if (up.exitCode !== 0) {
+        console.error(`Failed to upload DB: exitCode=${up.exitCode}`);
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        process.exit(1);
+      }
+
+      console.log(`Generated API key (save this now — it will not be shown again): ${key}`);
+      console.log(`API key id: ${id}`);
+    } finally {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) { }
     }
   });
 

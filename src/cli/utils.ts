@@ -206,3 +206,35 @@ export const canPingCloudRouter = async (config: any) => {
   const pingRes = await $`ping -c 1 cloud-router`.quiet().nothrow();
   return pingRes.exitCode === 0;
 }
+
+// SCP/SSH helpers for CLI operations against the remote cloud-router
+export const scpDownload = async (config: any, remotePath: string, localPath: string) => {
+  const keyFile = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
+  const cmd = $`scp -i ${keyFile} -o StrictHostKeyChecking=no ec2-user@${config.ip}:${remotePath} ${localPath}`.nothrow();
+  return await cmd;
+}
+
+export const scpUpload = async (config: any, localPath: string, remotePath: string) => {
+  const keyFile = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
+  const cmd = $`scp -i ${keyFile} -o StrictHostKeyChecking=no ${localPath} ec2-user@${config.ip}:${remotePath}`.nothrow();
+  return await cmd;
+}
+
+// Try to find the remote sqlite database path by probing common locations
+export const findRemoteDatabasePath = async (config: any) => {
+  const candidates = [
+    '~/cloud-router/database.sqlite',
+    '~/database.sqlite',
+    '/home/ec2-user/cloud-router/database.sqlite',
+    '~/cloud-router/database/database.sqlite',
+    'database.sqlite'
+  ];
+  for (const p of candidates) {
+    const testCmd = `test -f ${p} && echo exists || echo missing`;
+    const res = await ssh(config.ip, testCmd, 5000);
+    if (res.exitCode === 0 && res.text && res.text.includes('exists')) {
+      return p.replace(/^~\//, '/home/ec2-user/');
+    }
+  }
+  return null;
+}
