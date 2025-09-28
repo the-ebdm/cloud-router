@@ -385,10 +385,10 @@ export const findRemoteDatabasePath = async (config: any) => {
 }
 
 export const createSystemdService = async (config: any) => {
-  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
+  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
   const checkFile = await run("test -f /etc/systemd/system/cloud-router.service && echo exists || echo missing");
+  // TODO: Hash comparison between the service file and the content above
   if (checkFile.stdout && checkFile.stdout.toString().trim().includes("exists")) {
-    console.log("Systemd service file already exists.");
     return { exists: true };
   }
   const serviceContent = `[Unit]
@@ -428,28 +428,24 @@ export const enableSystemdService = async (config: any) => {
   const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
   const cmd = "sudo systemctl enable cloud-router";
   const res = await run(cmd);
-  if (res.exitCode === 0) {
-    console.log("Systemd service enabled.");
-  } else {
+  if (res.exitCode !== 0) {
     console.log("Failed to enable systemd service.");
   }
   return res;
 };
 
 export const startSystemdService = async (config: any) => {
-  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
+  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
   const cmd = "sudo systemctl start cloud-router";
   const res = await run(cmd);
-  if (res.exitCode === 0) {
-    console.log("Systemd service started.");
-  } else {
+  if (res.exitCode !== 0) {
     console.log("Failed to start systemd service.");
   }
   return res;
 };
 
 export const getSystemdStatus = async (config: any) => {
-  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
+  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
   const cmd = "sudo systemctl status cloud-router --no-pager -l";
   const res = await run(cmd);
   return res;

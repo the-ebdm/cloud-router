@@ -49,7 +49,7 @@ program.command("status").action(async () => {
   }
 
   // Use direct SSH for initial source code check and setup (runs from remote home, no cd)
-  const directSsh = (cmd: string, opts?: any) => ssh(config.ip, cmd, { ...opts, timeout: 10000, showOutput: true });
+  const directSsh = (cmd: string, opts?: any) => ssh(config.ip, cmd, { ...opts, timeout: 10000, showOutput: false });
 
   const gitCheck = await directSsh("git -C /home/ec2-user/cloud-router rev-parse --git-dir");
   if (gitCheck.exitCode !== 0) {
@@ -98,35 +98,15 @@ program.command("status").action(async () => {
 
   const statusRes = await getSystemdStatus(config);
 
-  console.log("Server systemd status:");
-
   if (statusRes.exitCode === 0 && statusRes.stdout && statusRes.stdout.toString().includes("Active: active (running)")) {
-
     console.log("Cloud Router server is running via systemd.");
-
     config.serverStatus = "running";
-
     setConfig({ ...config, status: "running" });  // Update overall status
-
   } else {
-
     console.log("Cloud Router server is not running. Check logs: sudo journalctl -u cloud-router -f");
-
     config.serverStatus = "stopped";
-
     setConfig({ ...config, status: "running" });  // Instance running, but server not
-
   }
-
-  // Print status text if available
-
-  if (statusRes.stdout) {
-
-    console.log(statusRes.stdout.toString());
-
-  }
-
-  // No session to close
 });
 
 program.command("start").action(async () => {
