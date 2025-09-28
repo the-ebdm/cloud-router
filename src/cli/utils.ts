@@ -406,8 +406,8 @@ Restart=always
 RestartSec=5
 MemoryLimit=400M
 CPUQuota=80%
-StandardOutput=journal
-StandardError=journal
+StandardOutput=append:/home/ec2-user/cloud-router/logs/cloud-router.log
+StandardError=append:/home/ec2-user/cloud-router/logs/cloud-router.log
 
 [Install]
 WantedBy=multi-user.target`;
