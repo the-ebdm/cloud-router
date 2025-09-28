@@ -5,7 +5,7 @@ import { logger } from "@/lib/logger";
 
 const domainsRouter = express.Router();
 
-domainsRouter.post('/', (req, res) => {
+domainsRouter.post('/', async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
@@ -13,10 +13,27 @@ domainsRouter.post('/', (req, res) => {
       return res.status(400).json({ error: 'Domain name is required and must be a non-empty string' });
     }
 
-    logger.info('Attempting to create domain:', { name: name.trim() });
-    const id = createDomain({ name: name.trim() });
+    const trimmed = name.trim();
+    logger.info('Attempting to create domain:', { name: trimmed });
+
+    // Try to resolve a Route53 hosted zone ID for the domain. If we can't find one
+    // we still create the domain record but leave hosted_zone_id null. This avoids
+    // blocking the user if their CLI/permissions are not set up in the server environment.
+    let hostedZoneId: string | null = null;
+    try {
+      hostedZoneId = await getHostedZoneId(trimmed);
+      if (!hostedZoneId) {
+        logger.info('No hosted zone found for domain or insufficient permissions', { domain: trimmed });
+      } else {
+        logger.info('Found hosted zone id for domain', { domain: trimmed, hostedZoneId });
+      }
+    } catch (err: any) {
+      logger.error('Error while looking up hosted zone for domain', { domain: trimmed, error: err.message });
+    }
+
+    const id = createDomain({ name: trimmed, hosted_zone_id: hostedZoneId ?? undefined });
     logger.info(`Domain created successfully with ID: ${id}`);
-    res.status(201).json({ id });
+    res.status(201).json({ id, hosted_zone_id: hostedZoneId });
   } catch (error: any) {
     logger.error('Domain creation failed:', { error: error.message, stack: error.stack });
     res.status(400).json({ error: 'Failed to create domain', details: error.message });
