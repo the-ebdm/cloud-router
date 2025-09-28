@@ -1,6 +1,7 @@
 import express from "express";
 import { createDomain, getDomainById, getAllDomains, updateDomain, deleteDomain } from "@/lib/database";
 import { getHostedZoneId } from "../utils";
+import { logger } from "@/lib/logger";
 
 const domainsRouter = express.Router();
 
@@ -8,16 +9,16 @@ domainsRouter.post('/', (req, res) => {
   try {
     const { name } = req.body;
     if (!name || typeof name !== 'string' || !name.trim()) {
-      log('Validation error: Invalid domain name', { name });
+      logger.info('Validation error: Invalid domain name', { name });
       return res.status(400).json({ error: 'Domain name is required and must be a non-empty string' });
     }
 
-    log('Attempting to create domain:', { name: name.trim() });
+    logger.info('Attempting to create domain:', { name: name.trim() });
     const id = createDomain({ name: name.trim() });
-    log(`Domain created successfully with ID: ${id}`);
+    logger.info(`Domain created successfully with ID: ${id}`);
     res.status(201).json({ id });
-  } catch (error) {
-    log('Domain creation failed:', { error: error.message, stack: error.stack });
+  } catch (error: any) {
+    logger.error('Domain creation failed:', { error: error.message, stack: error.stack });
     res.status(400).json({ error: 'Failed to create domain', details: error.message });
   }
 });
