@@ -51,10 +51,6 @@ program.command("status").action(async () => {
   // Use direct SSH for initial source code check and setup (runs from remote home, no cd)
   const directSsh = (cmd: string, opts?: any) => ssh(config.ip, cmd, { ...opts, timeout: 10000, showOutput: false });
 
-  // Get local HEAD hash for comparison
-  const localHash = (await $`git rev-parse HEAD`.text()).slice(0, 7);
-  console.log(`Local commit hash: ${localHash}`);
-
   const gitCheck = await directSsh("git -C /home/ec2-user/cloud-router rev-parse --git-dir");
   if (gitCheck.exitCode !== 0) {
     console.log("Valid git repository not found, setting up fresh...");
@@ -73,7 +69,7 @@ program.command("status").action(async () => {
     console.log("Source code found (valid git repo).");
   }
 
-  // In the status command, replace the git pull section with this enhanced version:
+  // In the status command, after the gitCheck block and console.log("Source code found (valid git repo)."); or cloned successfully
 
   // Remove session creation and use direct SSH with cd for all subsequent commands
   const workDir = "/home/ec2-user/cloud-router";
@@ -86,34 +82,10 @@ program.command("status").action(async () => {
   await ensureGit(config);  // Direct SSH
 
   console.log("Pulling source code...");
-  const pullRes = await cdRun("git fetch origin && git reset --hard origin/master && git pull origin master");
-  console.log(`Git pull result: exitCode=${pullRes.exitCode}`);
-  console.log(`Pull output: ${pullRes.stdout?.toString() || 'No output'}`);
-  if (pullRes.stderr) {
-    console.error(`Pull errors: ${pullRes.stderr.toString()}`);
-  }
-
+  const pullRes = await cdRun("git pull");
   if (pullRes.exitCode !== 0) {
-    console.log("Git pull failed; attempting clean reset...");
-    const resetRes = await cdRun("git clean -fd && git reset --hard origin/master");
-    if (resetRes.exitCode !== 0) {
-      console.log("Reset failed; remote code may be outdated. Consider manual git operations.");
-    } else {
-      console.log("Clean reset completed.");
-    }
+    console.log("Git pull failed; repository may be up to date or have issues. Continuing...");
   }
-
-  // Verify remote hash after pull/reset
-  const remoteHash = (await cdRun("git rev-parse HEAD")).stdout?.toString().trim().slice(0, 7);
-  console.log(`Remote commit hash after pull: ${remoteHash}`);
-  if (remoteHash !== localHash) {
-    console.log(`Hash mismatch: local=${localHash}, remote=${remoteHash}. Remote is outdated.`);
-    console.log("To fix: Run 'cloud-router exec \"git reset --hard <local-hash>\"' with the local hash.");
-  } else {
-    console.log("Remote code is up to date.");
-  }
-
-  // Continue with existing bun install, build, etc.
 
   const bunPath = await ensureBun(config);  // Direct SSH, no runner needed now
 

@@ -4,8 +4,8 @@ import {
   createContext,
   useContext,
   useState,
-  ReactNode,
   useEffect,
+  ReactNode,
 } from "react";
 
 interface ApiContextType {
@@ -17,26 +17,13 @@ interface ApiContextType {
 const ApiContext = createContext<ApiContextType | undefined>(undefined);
 
 export function ApiProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(localStorage.getItem("apiKey") || "");
   // TODO: Configure this properly based on environment
   const baseUrl =
     process.env.NEXT_PUBLIC_API_URL || "http://cloud-router:3000/api/v1";
 
-  // Load from localStorage on client mount
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedKey = localStorage.getItem("apiKey");
-      if (savedKey) {
-        setApiKey(savedKey);
-      }
-    }
-  }, []);
-
-  // Persist to localStorage when key changes (client only)
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("apiKey", apiKey);
-    }
+    localStorage.setItem("apiKey", apiKey);
   }, [apiKey]);
 
   return (
@@ -71,15 +58,9 @@ export function useApiRequest() {
 
     if (!response.ok) {
       const error = await response.text();
-      if (response.status === 401) {
-        console.log("API key is invalid");
-        return null;
-      } else {
-        console.error(`API Error: ${response.status} ${error}`);
-        return null;
-      }
+      throw new Error(`API Error: ${response.status} ${error}`);
     }
 
-    return await response.json();
+    return response.json();
   };
 }
