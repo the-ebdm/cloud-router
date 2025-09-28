@@ -386,11 +386,7 @@ export const findRemoteDatabasePath = async (config: any) => {
 
 export const createSystemdService = async (config: any) => {
   const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
-  const checkFile = await run("test -f /etc/systemd/system/cloud-router.service && echo exists || echo missing");
-  // TODO: Hash comparison between the service file and the content above
-  if (checkFile.stdout && checkFile.stdout.toString().trim().includes("exists")) {
-    return { exists: true };
-  }
+
   const serviceContent = `[Unit]
 Description=Cloud Router Server
 After=network.target
@@ -411,17 +407,38 @@ StandardError=append:/home/ec2-user/cloud-router/logs/cloud-router.log
 
 [Install]
 WantedBy=multi-user.target`;
+
+  const expectedHash = require('crypto').createHash('sha256').update(serviceContent).digest('hex');
+
+  // Check if file exists and get its hash
+  const checkHashCmd = `test -f /etc/systemd/system/cloud-router.service && sha256sum /etc/systemd/system/cloud-router.service | cut -d' ' -f1 || echo missing`;
+  const checkHashRes = await run(checkHashCmd);
+
+  const currentHash = checkHashRes.stdout?.toString().trim();
+
+  if (currentHash && currentHash !== 'missing' && currentHash === expectedHash) {
+    return { exists: true, hashMatch: true };
+  }
+
+  // Create or update the service file
   const createCmd = `sudo tee /etc/systemd/system/cloud-router.service > /dev/null << 'EOF'
 ${serviceContent}
 EOF
 sudo systemctl daemon-reload`;
+
   const createRes = await run(createCmd);
+
   if (createRes.exitCode === 0) {
-    console.log("Systemd service created and reloaded.");
+    if (currentHash && currentHash !== 'missing') {
+      console.log("Systemd service updated (hash mismatch) and reloaded.");
+    } else {
+      console.log("Systemd service created and reloaded.");
+    }
   } else {
-    console.log("Failed to create systemd service.");
+    console.log("Failed to create/update systemd service.");
   }
-  return createRes;
+
+  return { ...createRes, hashMatch: false };
 };
 
 export const enableSystemdService = async (config: any) => {
