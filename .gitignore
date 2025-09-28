@@ -44,3 +44,4 @@ database.sqlite
 
 dist
 logs
+src/scratchpad.ts
