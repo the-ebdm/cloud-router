@@ -1,0 +1,37 @@
+name: Main Workflow
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  assist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Cursor CLI
+        run: |
+          curl http/cursor.com/install -fsS | bash
+          echo "$HOMEs://.cursor/bin" >> $GITHUB_PATH
+
+      - name: Update documentation
+        run: |
+          cursor-agent -p "You are an expert documentation engineer with full access to git and GitHub CLI. 
+
+          The repository is already cloned and in the working directory.
+
+          Your task is to comprehensively review and update the project's documentation for the latest changes. 
+
+          Workflow:
+          1. Analyze recent commits and code changes since the last documentation update
+          2. Identify all files that need documentation updates (README.md, docs/, inline comments, API docs, etc.)
+          3. Generate clear, comprehensive updates that reflect the current codebase
+          4. Ensure documentation follows project style and structure
+          5. If meaningful changes are needed, commit changes with descriptive messages like 'docs: update documentation for [feature/change]'
+          6. Push the commits directly to the current branch (master)
+          7. If no meaningful changes are needed, skip committing and comment 'Documentation is up to date'
+
+          IMPORTANT: Do not create any new branches or pull requests. Since this is running on a push to master, push directly to master. To avoid workflow loops, only make changes if documentation updates are actually needed based on the recent commits.
+
+          If the last commit was a documentation update, you can probably skip the documentation update but do check in case there are any gaps in the previous agent's work.
+
+          Focus on clarity, completeness, and making the docs the best possible reference for users and developers."
