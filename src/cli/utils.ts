@@ -377,7 +377,7 @@ export const findRemoteDatabasePath = async (config: any) => {
     const res = await ssh(config.ip, testCmd, {
       timeout: 5000
     });
-    if (res.exitCode === 0 && res.text && res.stdout.toString().includes('exists')) {
+    if (res.exitCode === 0 && res.stdout && res.stdout.toString().includes('exists')) {
       return p.replace(/^~\//, '/home/ec2-user/');
     }
   }
