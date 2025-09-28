@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun, createSSHSession } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun, createSSHSession, createSystemdService, enableSystemdService, startSystemdService, getSystemdStatus } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
@@ -33,6 +33,18 @@ program.command("status").action(async () => {
 
   console.log(`Cloud Router is ${status}`);
   if (status !== "running") {
+    return;
+  }
+
+  // Basic SSH test to confirm reachability and set status
+  console.log("Testing SSH connectivity...");
+  const testSsh = await ssh(config.ip, "echo 'reachable'", { timeout: 10000, showOutput: false });
+  if (testSsh.exitCode === 0) {
+    console.log("Cloud Router is reachable");
+    config.status = "reachable";
+    setConfig(config);
+  } else {
+    console.log("Cloud Router is not reachable via SSH. Run diagnostics or check network.");
     return;
   }
 
@@ -66,9 +78,6 @@ program.command("status").action(async () => {
     return directSsh(fullCmd, { ...opts, showOutput: true });
   };
 
-  // ls inside dir
-  await cdRun("ls -la");
-
   // Ensure git (already done earlier, but ensureBun needs it implicitly)
   await ensureGit(config);  // Direct SSH
 
@@ -81,8 +90,41 @@ program.command("status").action(async () => {
   const bunPath = await ensureBun(config);  // Direct SSH, no runner needed now
 
   await cdRun(`${bunPath} install`);
+  await cdRun(`${bunPath} run build:server`);
 
-  await cdRun(`${bunPath} run build`);
+  await createSystemdService(config);
+  await enableSystemdService(config);
+  await startSystemdService(config);
+
+  const statusRes = await getSystemdStatus(config);
+
+  console.log("Server systemd status:");
+
+  if (statusRes.exitCode === 0 && statusRes.stdout && statusRes.stdout.toString().includes("Active: active (running)")) {
+
+    console.log("Cloud Router server is running via systemd.");
+
+    config.serverStatus = "running";
+
+    setConfig({ ...config, status: "running" });  // Update overall status
+
+  } else {
+
+    console.log("Cloud Router server is not running. Check logs: sudo journalctl -u cloud-router -f");
+
+    config.serverStatus = "stopped";
+
+    setConfig({ ...config, status: "running" });  // Instance running, but server not
+
+  }
+
+  // Print status text if available
+
+  if (statusRes.stdout) {
+
+    console.log(statusRes.stdout.toString());
+
+  }
 
   // No session to close
 });
@@ -314,35 +356,43 @@ program
   .option("-v, --verbose", "Show verbose SSH output")
   .action(async (cmd: string, options) => {
     const config = getConfig();
-    if (config.status !== "reachable") {
-      console.log("Cloud Router is not reachable. Run `cloud-router status` first to set it up.");
-      return;
-    }
-
     if (!config.ip) {
-      console.error("No IP found in config.");
+      console.error("No IP found in config. Run `cloud-router start` and `status` first.");
       process.exit(1);
     }
 
-    const keyOk = ensureKeyPermissions();  // Note: ensureKeyPermissions is now exported and synchronous
+    const keyOk = ensureKeyPermissions();
     if (!keyOk) {
       console.error("SSH key issue; fix with: chmod 400 ~/.cloud-router/cloud-router.pem");
       process.exit(1);
     }
 
-    // Use direct SSH with cd to work dir and the command
+    // Independent reachability test if status not set
+    if (config.status !== "reachable") {
+      console.log("Status not marked as reachable; verifying SSH connectivity...");
+      const testRes = await ssh(config.ip, "echo 'reachable'", { timeout: 10000, showOutput: false });
+      if (testRes.exitCode !== 0) {
+        console.log("SSH not reachable. Run `cloud-router status` to diagnose and set up.");
+        return;
+      }
+      console.log("SSH verified reachable; proceeding.");
+      config.status = "reachable";
+      setConfig(config);
+    }
+
+    // Proceed with execution
     const workDir = "/home/ec2-user/cloud-router";
     const fullCmd = `cd ${workDir} && ${cmd}`;
 
     const sshOpts: any = {
       showOutput: true,
-      timeout: 30000,  // 30s default
+      timeout: 30000,
     };
     if (options.verbose) {
       sshOpts.verbose = true;
     }
 
-    console.log(`Running remote command: ${cmd}`);
+    console.log(`Running remote command: cd ${workDir} && ${cmd}`);
     const result = await ssh(config.ip, fullCmd, sshOpts);
 
     if (result.exitCode !== 0) {
