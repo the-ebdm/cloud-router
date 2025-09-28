@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
@@ -113,6 +113,16 @@ program.command("status").action(async () => {
         console.log("SSH succeeded on retry");
       } else {
         console.log(`SSH retry failed (exitCode=${retry.exitCode}). Check the logs above for where it failed.`);
+
+        // Run additional local diagnostics to help identify connectivity issues
+        try {
+          console.log("Running local connectivity diagnostics...");
+          const diagnostics = await runConnectivityDiagnostics(config.ip!);
+          console.log(`Connectivity diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`);
+        } catch (e) {
+          console.log(`Failed to run connectivity diagnostics: ${e}`);
+        }
+
         return;
       }
     }

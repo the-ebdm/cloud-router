@@ -167,6 +167,38 @@ export const ensureKeyPermissions = () => {
   return true;
 };
 
+// Run connectivity diagnostics from the user's machine towards the target public IP
+export const runConnectivityDiagnostics = async (publicIp: string) => {
+  const diagnostics: any = {};
+
+  try {
+    // TCP port 22 check using nc if available
+    const ncCheck = await $`nc -vz ${publicIp} 22`.nothrow();
+    diagnostics.tcp22 = { exitCode: ncCheck.exitCode, text: ncCheck.stderr || ncCheck.stdout };
+  } catch (e) {
+    diagnostics.tcp22 = { error: String(e) };
+  }
+
+  try {
+    // Traceroute to the host
+    const tracer = await $`traceroute -m 30 ${publicIp}`.nothrow();
+    diagnostics.traceroute = { exitCode: tracer.exitCode, text: tracer.stdout || tracer.stderr };
+  } catch (e) {
+    diagnostics.traceroute = { error: String(e) };
+  }
+
+  try {
+    // Check network interfaces on AWS for the instance by resolving via public IP -> describe-network-interfaces
+    // This is a lightweight probe that attempts to find ENIs matching the IP
+    const eniLookup = await $`aws ec2 describe-network-interfaces --filters Name=addresses.association.public-ip,Values=${publicIp} --output json`.nothrow();
+    diagnostics.eni = { exitCode: eniLookup.exitCode, json: eniLookup.stdout || eniLookup.stderr };
+  } catch (e) {
+    diagnostics.eni = { error: String(e) };
+  }
+
+  return diagnostics;
+}
+
 export const checkTailscaleCli = async (config: any) => {
   const tailscaleCli = await ssh(config.ip, "tailscale --version");
   return tailscaleCli.exitCode === 0;
