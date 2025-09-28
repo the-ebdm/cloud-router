@@ -137,15 +137,15 @@ export const createSSHSession = async (config: any, options: { controlPersist?: 
   const run = async (command: string, opts: SSHOptions = {}) => {
     const { timeout: cmdTimeout = timeout, showOutput = false, verbose = false, cwd = workDir } = opts;
     // default to running inside the configured workDir so callers don't need to 'cd' repeatedly
-    const fullCommand = `${envExports} cd ${cwd} && ${command}`;
+    const fullCommand = `${command}`;
     console.log(`Running command: ${fullCommand}`);
     if (showOutput) {
       if (verbose) {
-        return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.nothrow();
+        return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc cd ${cwd} && ${command}`.nothrow();
       }
-      return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.nothrow();
+      return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc cd ${cwd} && ${command}`.nothrow();
     }
-    return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc ${fullCommand}`.quiet().nothrow();
+    return await $`ssh -S ${socketPath} -o ConnectTimeout=${Math.ceil(cmdTimeout / 1000)} -i ${keyFile} ec2-user@${targetIp} bash -lc cd ${cwd} && ${command}`.quiet().nothrow();
   };
 
   const close = async () => {
@@ -324,26 +324,26 @@ export const ensureTailscale = async (config: any) => {
 };
 
 export const ensureGit = async (config: any, runner?: (cmd: string, opts?: SSHOptions) => Promise<any>) => {
-  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, o));
+  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, { ...o, showOutput: false }));
   const gitRes = await run("git --version");
   if (gitRes.exitCode !== 0) {
     console.log("Git is not installed; installing...");
-    await run("sudo yum install -y git", { showOutput: true });
+    await run("sudo yum install -y git");
   }
   console.log("Git installed successfully");
-}
+};
 
 export const ensureBun = async (config: any, runner?: (cmd: string, opts?: SSHOptions) => Promise<any>) => {
-  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, o));
+  const run = runner || ((c: string, o?: SSHOptions) => ssh(config.ip, c, { ...o, showOutput: false }));
   const bunPath = "/home/ec2-user/.bun/bin/bun";
-  const bunRes = await run(`${bunPath} --version`, { showOutput: true });
+  const bunRes = await run(`${bunPath} --version`);
   if (bunRes.exitCode !== 0) {
     console.log("Bun is not installed; installing...");
-    await run("curl -fsSL https://bun.sh/install | bash", { showOutput: true });
+    await run("curl -fsSL https://bun.sh/install | bash");
     console.log("Bun installed successfully");
   }
   return bunPath;
-}
+};
 
 export const canPingCloudRouter = async (config: any) => {
   const pingRes = await $`ping -c 1 cloud-router`.quiet().nothrow();

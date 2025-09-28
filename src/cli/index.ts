@@ -36,168 +36,55 @@ program.command("status").action(async () => {
     return;
   }
 
-  let session: any = null;
+  // Use direct SSH for initial source code check and setup (runs from remote home, no cd)
+  const directSsh = (cmd: string, opts?: any) => ssh(config.ip, cmd, { ...opts, timeout: 10000, showOutput: true });
 
-  const canPing = await canPingCloudRouter(config);
-  if (!canPing) {
-    // Check configuration
-    // Check if ip is set
-    if (config.ip === undefined) {
-      console.log("IP address not found, getting public IP...");
-      const publicIp = await $`aws ec2 describe-instances --instance-ids ${config.instanceId} --region ${config.region} --query 'Reservations[0].Instances[0].PublicIpAddress' --output text`.text();
-      config.ip = publicIp;
-      setConfig(config);
+  const gitCheck = await directSsh("git -C /home/ec2-user/cloud-router rev-parse --git-dir");
+  if (gitCheck.exitCode !== 0) {
+    console.log("Valid git repository not found, setting up fresh...");
+    await ensureGit(config);  // Installs git if needed, with showOutput via direct ssh
+    const rmRes = await directSsh("rm -rf /home/ec2-user/cloud-router");
+    if (rmRes.exitCode === 0) {
+      console.log("Removed existing cloud-router directory.");
     }
-
-    console.log(`Checking configuration...`);
-
-    // Ensure key permissions before SSH
-    const keyOk = await ensureKeyPermissions();
-    if (!keyOk) {
-      console.log("SSH key issue detected. Fix manually with: chmod 400 ~/.cloud-router/cloud-router.pem");
-      console.log("Skipping SSH connectivity check.");
+    const cloneRes = await directSsh("git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router");
+    if (cloneRes.exitCode !== 0) {
+      console.log("Failed to clone source code. Check SSH connectivity, git installation, and try again.");
       return;
     }
-
-    config = getConfig();  // Refresh config
-
-    // Create a master SSH session and reuse it for subsequent commands
-    try {
-      session = await createSSHSession(config, { controlPersist: 600, timeout: 10000 });
-    } catch (e) {
-      console.log(`Failed to start SSH master session: ${e}. Falling back to single-shot SSH.`);
-    }
-
-    const runRemote = session ? session.run : (cmd: string, opts?: any) => ssh(config.ip, cmd, opts);
-
-    // Connect using preferred IP (ssh function handles fallback)
-    const { exitCode } = await runRemote("echo 'Hello, World!'", {
-      timeout: 5000,
-      showOutput: true
-    });
-    if (exitCode !== 0) {
-      console.log("IP address is not reachable, starting verbose diagnostics...");
-
-      // Ensure security group exists
-      const securityGroupId = await ensureSecurityGroup(config, config.region);
-      console.log(`Using security group: ${securityGroupId}`);
-
-      const userIp = await getUserIp();
-      console.log(`Detected user public IP: ${userIp}`);
-
-      // Show SG rules before change
-      try {
-        const sgBefore = await describeSecurityGroup(securityGroupId, config.region);
-        console.log(`Security group inbound (before): ${JSON.stringify(sgBefore.IpPermissions)}`);
-      } catch (err) {
-        console.log(`Could not describe security group before changes: ${err}`);
-      }
-
-      // Ensure SSH ingress
-      await ensureSshIngress(securityGroupId, config.region);
-
-      // Show SG rules after change
-      try {
-        const sgAfter = await describeSecurityGroup(securityGroupId, config.region);
-        console.log(`Security group inbound (after): ${JSON.stringify(sgAfter.IpPermissions)}`);
-      } catch (err) {
-        console.log(`Could not describe security group after changes: ${err}`);
-      }
-
-      // Ensure SG attached to instance and show diffs
-      const attachRes = await ensureSecurityGroupAttached(config.instanceId, securityGroupId, config.region);
-      console.log(`Instance security groups (before): ${attachRes.before.join(", ")}`);
-      console.log(`Instance security groups (after): ${attachRes.after.join(", ")}`);
-      if (attachRes.modifyError) {
-        console.log(`Error while attaching security group: ${attachRes.modifyError}`);
-      } else if (attachRes.modifyResult) {
-        console.log(`Attach command exitCode: ${attachRes.modifyResult.exitCode}`);
-      }
-
-      // Retry SSH with longer timeout and verboseness
-      console.log("Retrying SSH with longer timeout...");
-      const retry = await ssh(config.ip, "echo 'Hello, World!'", {
-        timeout: 15000,
-        showOutput: true
-      });
-      if (retry.exitCode === 0) {
-        console.log("SSH succeeded on retry");
-      } else {
-        console.log(`SSH retry failed (exitCode=${retry.exitCode}). Check the logs above for where it failed.`);
-
-        // Run additional local diagnostics to help identify connectivity issues
-        try {
-          console.log("Running local connectivity diagnostics...");
-          const diagnostics = await runConnectivityDiagnostics(config.ip!);
-          console.log(`Connectivity diagnostics:\n${JSON.stringify(diagnostics, null, 2)}`);
-        } catch (e) {
-          console.log(`Failed to run connectivity diagnostics: ${e}`);
-        }
-
-        return;
-      }
-    }
-
-    // We can connect
-    // Next step is to check tailscale
-    // Install and configure if it's not already setup
-    // Check Tailscale if not set
-    if (!config.tailscaleIp && status === "running") {
-      console.log("Tailscale IP not set; configuring...");
-      await ensureTailscale(config);
-    }
+    console.log("Cloned source code successfully.");
+  } else {
+    console.log("Source code found (valid git repo).");
   }
 
-  console.log("Cloud Router is reachable");
-  config.status = "reachable";
-  setConfig(config);
+  // In the status command, after the gitCheck block and console.log("Source code found (valid git repo)."); or cloned successfully
 
-  if (session === null) {
-    session = await createSSHSession(config, { controlPersist: 600, timeout: 10000 });
-  }
-  const run = session.run;
+  // Remove session creation and use direct SSH with cd for all subsequent commands
+  const workDir = "/home/ec2-user/cloud-router";
+  const cdRun = async (cmd: string, opts?: any) => {
+    const fullCmd = `cd ${workDir} && ${cmd}`;
+    return directSsh(fullCmd, { ...opts, showOutput: true });
+  };
 
-  // Fix source code check in status command
-  const sourceCheck = await run("test -d /home/ec2-user/cloud-router/.git");
-  if (sourceCheck.exitCode !== 0) {
-    console.log("Git repository not found, cloning...");
-    await ensureGit(config, run);
-    await run("rm -rf /home/ec2-user/cloud-router", { showOutput: true });
-    await run("git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router", {
-      showOutput: true
-    });
-  }
+  // ls inside dir
+  await cdRun("ls -la");
 
-  console.log("Source code found");
-
-  await run("ls -la", {
-    showOutput: true,
-  });
+  // Ensure git (already done earlier, but ensureBun needs it implicitly)
+  await ensureGit(config);  // Direct SSH
 
   console.log("Pulling source code...");
-  // Git pull (run in session workDir)
-  await run("git pull", {
-    showOutput: true
-  });
-
-  const bunPath = await ensureBun(config, run);
-
-  await run(`${bunPath} install`, {
-    showOutput: true
-  });
-
-  await run(`${bunPath} run build`, {
-    showOutput: true
-  });
-
-  // Close SSH master session if we started one
-  try {
-    if (session && session.close) {
-      await session.close();
-    }
-  } catch (e) {
-    console.log(`Failed to close SSH session: ${e}`);
+  const pullRes = await cdRun("git pull");
+  if (pullRes.exitCode !== 0) {
+    console.log("Git pull failed; repository may be up to date or have issues. Continuing...");
   }
+
+  const bunPath = await ensureBun(config);  // Direct SSH, no runner needed now
+
+  await cdRun(`${bunPath} install`);
+
+  await cdRun(`${bunPath} run build`);
+
+  // No session to close
 });
 
 program.command("start").action(async () => {
