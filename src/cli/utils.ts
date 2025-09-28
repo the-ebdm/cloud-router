@@ -80,9 +80,9 @@ export type SSHOptions = {
 export const ssh = async (ip: string, command: string, options: SSHOptions = {}) => {
   const { timeout = 10000, showOutput = false, verbose = false } = options;
   const config = getConfig();
-  const targetIp = config.tailscaleIp || ip;  // Prefer Tailscale if available
+  const targetIp = config.tailscaleHostname || ip;  // Prefer Tailscale if available
   if (showOutput) {
-    console.log(`SSHing to ${targetIp} (using ${config.tailscaleIp ? 'Tailscale' : 'public'} IP)`);
+    console.log(`SSHing to ${targetIp} (using ${config.tailscaleHostname ? 'Tailscale' : 'public'} IP)`);
     if (verbose) {
       return await $`ssh -vvv -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
     }
@@ -255,6 +255,17 @@ export const ensureTailscale = async (config: any) => {
     console.log('Failed to query Tailscale status; ensure it\'s running.');
   }
 };
+
+export const ensureGit = async (config: any) => {
+  const gitRes = await ssh(config.ip, "git --version");
+  if (gitRes.exitCode !== 0) {
+    console.log("Git is not installed; installing...");
+    await ssh(config.ip, "sudo yum install -y git", {
+      showOutput: true
+    });
+  }
+  console.log("Git installed successfully");
+}
 
 export const canPingCloudRouter = async (config: any) => {
   const pingRes = await $`ping -c 1 cloud-router`.quiet().nothrow();

@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
@@ -144,6 +144,7 @@ program.command("status").action(async () => {
   // Does it have the source?
   const sourceCode = await ssh(config.ip, "ls -la /home/ec2-user/cloud-router");
   if (sourceCode.exitCode !== 0) {
+    await ensureGit(config);
     console.log("Source code not found, installing...");
     await ssh(config.ip, "git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router", {
       showOutput: true
@@ -151,6 +152,10 @@ program.command("status").action(async () => {
   }
 
   console.log("Source code found");
+  // Git pull
+  await ssh(config.ip, "cd /home/ec2-user/cloud-router && git pull", {
+    showOutput: true
+  });
 });
 
 program.command("start").action(async () => {
