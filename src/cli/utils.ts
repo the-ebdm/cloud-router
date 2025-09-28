@@ -385,7 +385,7 @@ export const findRemoteDatabasePath = async (config: any) => {
 }
 
 export const createSystemdService = async (config: any) => {
-  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: false });
+  const run = (cmd: string) => ssh(config.ip, cmd, { showOutput: true });
 
   const serviceContent = `[Unit]
 Description=Cloud Router Server
@@ -415,6 +415,9 @@ WantedBy=multi-user.target`;
   const checkHashRes = await run(checkHashCmd);
 
   const currentHash = checkHashRes.stdout?.toString().trim();
+
+  console.log("Current hash:", currentHash);
+  console.log("Expected hash:", expectedHash);
 
   if (currentHash && currentHash !== 'missing' && currentHash === expectedHash) {
     return { exists: true, hashMatch: true };
