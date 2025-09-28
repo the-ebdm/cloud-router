@@ -86,7 +86,7 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   res.status(500).json({ error: 'Internal server error', details: err.message });
 });
 
-const port = process.env.PORT || 3001; // Changed to 3001 to avoid conflict with Next.js
+const port = process.env.PORT || 3000;
 app.listen(port, () => {
   logger.info(`Server is running on port ${port}`);
 });
