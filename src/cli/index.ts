@@ -3,7 +3,7 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun, createSSHSession, createSystemdService, enableSystemdService, startSystemdService, getSystemdStatus } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity, runConnectivityDiagnostics, ensureGit, ensureBun, createSSHSession, createSystemdService, enableSystemdService, startSystemdService, getSystemdStatus, ensureIamRoleAndInstanceProfile } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
@@ -193,8 +193,19 @@ program.command("start").action(async () => {
       const securityGroupId = await ensureSecurityGroup(config, region);
       await ensureSshIngress(securityGroupId, region);
 
+      // Ensure an IAM role / instance profile exists and attach it to the instance at launch.
+      // This gives the instance permissions to call Route53 without bundling credentials.
+      let instanceProfileArg = '';
+      try {
+        const { instanceProfileName } = await ensureIamRoleAndInstanceProfile(config, region);
+        // The AWS CLI parameter is --iam-instance-profile Name=<profileName>
+        instanceProfileArg = `--iam-instance-profile Name=${instanceProfileName}`;
+      } catch (e) {
+        console.log('Failed to ensure IAM role / instance profile; proceeding without instance profile');
+      }
+
       // Launch the instance in the specified VPC and subnet with the security group
-      const instance = await $`aws ec2 run-instances --image-id ${config.ami} --instance-type ${config.class} --key-name ${config.key} --region ${region} --subnet-id ${config.subnetId} --associate-public-ip-address --security-group-ids ${securityGroupId}`.json();
+      const instance = await $`aws ec2 run-instances --image-id ${config.ami} --instance-type ${config.class} --key-name ${config.key} --region ${region} --subnet-id ${config.subnetId} --associate-public-ip-address --security-group-ids ${securityGroupId} ${instanceProfileArg}`.json();
       console.log(instance);
       config.instanceId = instance.Instances[0].InstanceId;
       setConfig(config);

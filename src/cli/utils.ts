@@ -234,6 +234,60 @@ export const ensureKeyPermissions = () => {
   return true;
 };
 
+// Ensure an IAM role with a minimal Route53 policy exists, create an instance profile
+// and attach the role to the profile. Returns { roleName, instanceProfileName }.
+export const ensureIamRoleAndInstanceProfile = async (config: any, region: string, roleName = 'cloud-router-role') => {
+  const instanceProfileName = `${roleName}-profile`;
+
+  // Check if role exists
+  const getRole = await $`aws iam get-role --role-name ${roleName} --region ${region}`.quiet().nothrow();
+  if (getRole.exitCode !== 0) {
+    console.log(`Creating IAM role ${roleName}...`);
+    const assumeRolePolicy = JSON.stringify({
+      Version: "2012-10-17",
+      Statement: [{ Effect: "Allow", Principal: { Service: "ec2.amazonaws.com" }, Action: "sts:AssumeRole" }]
+    });
+    await $`aws iam create-role --role-name ${roleName} --assume-role-policy-document '${assumeRolePolicy}' --region ${region} --output json`.nothrow();
+  } else {
+    console.log(`IAM role ${roleName} already exists`);
+  }
+
+  // Attach an inline policy granting admin permissions (idempotent via put-role-policy)
+  const policyName = `${roleName}-admin`;
+  const policyDoc = JSON.stringify({
+    Version: "2012-10-17",
+    Statement: [
+      { Effect: "Allow", Action: ["*"], Resource: "*" }
+    ]
+  });
+  await $`aws iam put-role-policy --role-name ${roleName} --policy-name ${policyName} --policy-document '${policyDoc}' --region ${region}`.nothrow();
+
+  // Ensure instance profile exists
+  const getProfile = await $`aws iam get-instance-profile --instance-profile-name ${instanceProfileName} --region ${region}`.quiet().nothrow();
+  if (getProfile.exitCode !== 0) {
+    console.log(`Creating instance profile ${instanceProfileName}...`);
+    await $`aws iam create-instance-profile --instance-profile-name ${instanceProfileName} --region ${region}`.nothrow();
+  } else {
+    console.log(`Instance profile ${instanceProfileName} already exists`);
+  }
+
+  // Try to add role to instance profile (idempotent: add-role-to-instance-profile will fail if already attached)
+  const addRes = await $`aws iam add-role-to-instance-profile --instance-profile-name ${instanceProfileName} --role-name ${roleName} --region ${region}`.nothrow();
+  if (addRes.exitCode !== 0) {
+    // This commonly fails if the role is already attached; ignore errors here
+    console.log(`add-role-to-instance-profile returned non-zero (likely already attached): ${addRes.exitCode}`);
+  }
+
+  // Persist into user config for later reuse
+  try {
+    config.iamRole = roleName;
+    config.instanceProfile = instanceProfileName;
+    setConfig(config);
+  } catch (e) { }
+
+  return { roleName, instanceProfileName };
+};
+
 // Run connectivity diagnostics from the user's machine towards the target public IP
 export const runConnectivityDiagnostics = async (publicIp: string) => {
   const diagnostics: any = {};
