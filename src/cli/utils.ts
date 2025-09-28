@@ -47,6 +47,11 @@ export const checkAWSCli = async () => {
   return awsCli.includes("aws-cli");
 }
 
+export const getIdentity = async () => {
+  const identity = await $`aws sts get-caller-identity --output json`.json();
+  return identity;
+}
+
 export const getRegion = async () => {
   const res = await fetch("https://ifconfig.co/country-iso")
   const country = await res.text();
@@ -66,11 +71,24 @@ export const getUserIp = async () => {
   return ip.trim();
 }
 
-export const ssh = async (ip: string, command: string, timeout: number = 10000) => {
+export type SSHOptions = {
+  timeout?: number
+  showOutput?: boolean
+  verbose?: boolean
+}
+
+export const ssh = async (ip: string, command: string, options: SSHOptions = {}) => {
+  const { timeout = 10000, showOutput = false, verbose = false } = options;
   const config = getConfig();
   const targetIp = config.tailscaleIp || ip;  // Prefer Tailscale if available
-  console.log(`SSHing to ${targetIp} (using ${config.tailscaleIp ? 'Tailscale' : 'public'} IP)`);
-  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
+  if (showOutput) {
+    console.log(`SSHing to ${targetIp} (using ${config.tailscaleIp ? 'Tailscale' : 'public'} IP)`);
+    if (verbose) {
+      return await $`ssh -vvv -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
+    }
+    return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.nothrow();
+  }
+  return await $`ssh -o ConnectTimeout=${timeout / 1000} -i ~/.cloud-router/cloud-router.pem ec2-user@${targetIp} ${command}`.quiet().nothrow();
 };
 
 // Helper: describe an instance
@@ -162,7 +180,9 @@ export const ensureTailscale = async (config: any) => {
   if (!(await checkTailscaleCli(config))) {
     console.log("Tailscale CLI is not installed; installing...");
     const command = `curl -fsSL https://tailscale.com/install.sh | sh`
-    await ssh(config.ip, command);
+    await ssh(config.ip, command, {
+      showOutput: true
+    });
     console.log("Tailscale CLI installed successfully");
   }
 
@@ -183,7 +203,9 @@ export const ensureTailscale = async (config: any) => {
   }
 
   // Get Tailscale status via SSH to public IP (fallback if needed)
-  const statusRes = await ssh(config.ip, 'tailscale status --json', 10000);
+  const statusRes = await ssh(config.ip, 'tailscale status --json', {
+    timeout: 10000
+  });
   if (statusRes.exitCode === 0) {
     try {
       const tsStatus = JSON.parse(statusRes.text);
@@ -231,7 +253,9 @@ export const findRemoteDatabasePath = async (config: any) => {
   ];
   for (const p of candidates) {
     const testCmd = `test -f ${p} && echo exists || echo missing`;
-    const res = await ssh(config.ip, testCmd, 5000);
+    const res = await ssh(config.ip, testCmd, {
+      timeout: 5000
+    });
     if (res.exitCode === 0 && res.text && res.text.includes('exists')) {
       return p.replace(/^~\//, '/home/ec2-user/');
     }

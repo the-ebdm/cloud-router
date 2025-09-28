@@ -3,13 +3,18 @@ import { $ } from "bun";
 import path from "path";
 import fs from "fs";
 
-import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath } from "./utils";
+import { ssh, getConfig, setConfig, ensureSecurityGroup, ensureSshIngress, ensureSecurityGroupAttached, checkAWSCli, getRegion, describeInstance, describeSecurityGroup, getUserIp, ensureKeyPermissions, ensureTailscale, canPingCloudRouter, scpDownload, scpUpload, findRemoteDatabasePath, getIdentity } from "./utils";
 import crypto from "crypto";
 import { Database } from "bun:sqlite";
 import os from "os";
 
 program.command("status").action(async () => {
   let config = getConfig();
+  const identity = await getIdentity();
+  if (config.accountId !== identity.Account) {
+    console.log("Account ID mismatch, please make sure you are logged in with the correct account");
+    return;
+  }
   if (config.instanceId === undefined) {
     setConfig({ ...config, status: "non-existent" });
     console.log("Run `cloud-router start` to start the router");
@@ -121,6 +126,17 @@ program.command("status").action(async () => {
   console.log("Cloud Router is reachable");
   config.status = "reachable";
   setConfig(config);
+
+  // Does it have the source?
+  const sourceCode = await ssh(config.ip, "ls -la /home/ec2-user/cloud-router");
+  if (sourceCode.exitCode !== 0) {
+    console.log("Source code not found, installing...");
+    await ssh(config.ip, "git clone https://github.com/the-ebdm/cloud-router.git /home/ec2-user/cloud-router", {
+      showOutput: true
+    });
+  }
+
+  console.log("Source code found");
 });
 
 program.command("start").action(async () => {
@@ -139,10 +155,14 @@ program.command("start").action(async () => {
 
       setConfig({ ...config, region });
 
-      if (config.key === null) {
+      if (!config.key) {
         console.log("No key found, generating a new one");
         const key = await $`aws ec2 create-key-pair --key-name ${id} --query 'KeyMaterial' --output text`.text();
         const keyFilePath = path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem");
+        if (fs.existsSync(keyFilePath)) {
+          // Move the old key to a backup file
+          fs.renameSync(keyFilePath, path.join(process.env.HOME!, ".cloud-router", "cloud-router.pem.backup"));
+        }
         fs.writeFileSync(keyFilePath, key);
         fs.chmodSync(keyFilePath, 0o400);  // Set secure permissions
         console.log("SSH key created with secure permissions (0400).");
