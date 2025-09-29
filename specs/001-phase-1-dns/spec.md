@@ -11,6 +11,12 @@
 
 - Q: What specific DNS operations should this feature support? → A: Basic DNS record management with Route53 integration for domain discovery and subdomain creation
 
+### Session 2025-09-29 (Additional)
+
+- Q: What are the performance and scalability requirements for DNS operations? → A: Basic setup: <100 domains, <1000 DNS records total, operations complete within 30 seconds
+- Q: What are the security and privacy requirements for DNS operations? → A: Minimal security: Basic validation only, focus on functionality over security (MVP approach)
+- Q: What level of AWS Route53 error handling and recovery is needed? → A: Basic error handling: Show user-friendly messages for API failures, manual retry
+
 ## User Scenarios & Testing _(mandatory)_
 
 ### Primary User Story
@@ -43,6 +49,27 @@ As a service operator, I want to add my domain to Cloud Router so that I can eas
 - **FR-006**: System MUST prevent DNS record conflicts when creating new subdomains
 - **FR-007**: System MUST handle Route53 API errors gracefully with appropriate user feedback
 - **FR-008**: System MUST display the nameserver records for newly created hosted zones so users can configure domain delegation at their registrar
+
+### Non-Functional Requirements
+
+- **NFR-001**: System MUST support up to 100 domains and 1000 total DNS records
+- **NFR-002**: Domain addition operations MUST complete within 30 seconds
+- **NFR-003**: DNS record retrieval and display MUST complete within 30 seconds
+- **NFR-004**: Route53 API operations MUST provide user-friendly error messages for failures with manual retry capability
+- **NFR-005**: System MUST implement basic domain ownership validation (MVP security)
+
+### Future Security Enhancements (Phase 2)
+
+_Note: Comprehensive security features deferred to future phase per MVP requirements_
+
+**Recommended Security Features:**
+
+- Multi-factor authentication for DNS operations
+- Encryption of sensitive DNS record data at rest
+- Comprehensive audit logging with compliance requirements
+- Access controls and role-based permissions
+- Rate limiting and abuse prevention
+- Integration with security monitoring systems
 
 ### Key Entities _(include if feature involves data)_
 
