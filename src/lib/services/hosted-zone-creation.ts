@@ -83,12 +83,8 @@ export class HostedZoneCreationService {
           name: domainName,
           hosted_zone_id: route53Result.hostedZoneId,
           delegation_status: 'pending',
-          record_count: 0,
         });
       }
-
-      // Update delegation status to completed (assuming NS records are properly set)
-      this.domainModel.setDelegationStatus(domainId, 'completed');
 
       return {
         success: true,
@@ -208,7 +204,7 @@ export class HostedZoneCreationService {
       if (domainName) {
         const domain = this.domainModel.findByName(domainName);
         if (domain) {
-          this.domainModel.setHostedZoneId(domain.id!, undefined);
+          this.domainModel.update(domain.id!, { hosted_zone_id: null as any });
           this.domainModel.setDelegationStatus(domain.id!, 'failed');
         }
       }
