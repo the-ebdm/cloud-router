@@ -7,8 +7,32 @@ export const runMigrations = async (db: Database) => {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       hosted_zone_id TEXT,
+      delegation_status TEXT DEFAULT 'pending' CHECK (delegation_status IN ('pending', 'completed', 'failed')),
+      zone_created_at TEXT,
+      last_synced_at TEXT,
+      record_count INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
+    );
+  `).run();
+
+  // DNS Records
+  db.query(`
+    CREATE TABLE IF NOT EXISTS dns_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      domain_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('A', 'AAAA', 'CNAME', 'MX', 'TXT', 'SRV', 'PTR')),
+      value TEXT NOT NULL,
+      ttl INTEGER NOT NULL DEFAULT 300,
+      priority INTEGER,
+      weight INTEGER,
+      source TEXT NOT NULL CHECK (source IN ('route53', 'cloud_router')),
+      created_by_route_id INTEGER,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (domain_id) REFERENCES domains(id) ON DELETE CASCADE,
+      FOREIGN KEY (created_by_route_id) REFERENCES routes(id)
     );
   `).run();
 
@@ -110,6 +134,8 @@ export const runMigrations = async (db: Database) => {
   db.query(`CREATE INDEX IF NOT EXISTS idx_routes_domain_service ON routes(domain_id, service_id);`).run();
   db.query(`CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at);`).run();
   db.query(`CREATE INDEX IF NOT EXISTS idx_requests_service_id ON requests(service_id);`).run();
+  db.query(`CREATE INDEX IF NOT EXISTS idx_dns_records_domain_id ON dns_records(domain_id);`).run();
+  db.query(`CREATE INDEX IF NOT EXISTS idx_dns_records_created_by_route_id ON dns_records(created_by_route_id);`).run();
 
   // Api keys
   // Temporary until we have a proper auth system
