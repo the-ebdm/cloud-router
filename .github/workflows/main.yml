@@ -1,8 +1,7 @@
 name: Main Workflow
 on:
   push:
-    branches:
-      - master
+    branches: ['**']
 
 jobs:
   assist:
