@@ -1,14 +1,14 @@
 <!--
 Sync Impact Report
-- Version change: N/A → 1.0.0
-- Modified principles: —
-- Added sections: Core Principles; Security Requirements; Development Workflow & Quality Gates; Governance
+- Version change: 1.0.1 → 1.1.0 (MINOR: new principle added)
+- Modified principles: IV. Test‑First, Contract‑Driven Reliability (clarified test quality over quantity)
+- Added sections: Test Categories subsection; VI. Atomic Commits & Agent Autonomy (new principle)
 - Removed sections: —
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md (version + path reference)
   ✅ .specify/templates/tasks-template.md (categories mention observability/alerting)
   ⚠ README.md (expand docs when features mature)
-- Follow-up TODOs: —
+- Follow-up TODOs: Update plan.md constitution reference to v1.1.0
 -->
 
 # Cloud Router Constitution
@@ -49,13 +49,29 @@ Rationale: Troubleshooting routing issues requires high‑signal telemetry and d
 
 ### IV. Test‑First, Contract‑Driven Reliability
 
-Reliability is enforced through tests before implementation:
+Reliability is enforced through meaningful tests before implementation:
 
-- Follow Red‑Green‑Refactor: write contract and integration tests first, then implement to pass.
-- Contracts MUST cover routing behavior, certificate lifecycles, DNS updates, and CLI/API schemas.
-- Critical paths MUST have integration tests (tailscale connectivity, reverse proxying, persistence).
+**Test Quality Over Quantity**:
 
-Rationale: Contract tests prevent regressions in user‑visible behavior and enable safe iteration.
+- Tests MUST validate user-visible behavior and business contracts, NOT implementation details
+- Focus on acceptance criteria: what the system MUST do for users
+- Avoid testing internal functions, private methods, or obvious code behavior
+- Each test MUST provide regression protection or design feedback
+
+**Test-First Development**:
+
+- Follow Red‑Green‑Refactor: write contract and integration tests first, then implement to pass
+- Contracts MUST cover routing behavior, certificate lifecycles, DNS updates, and CLI/API schemas
+- Critical paths MUST have integration tests (tailscale connectivity, reverse proxying, persistence)
+
+**Test Categories**:
+
+- **Contract Tests**: API behavior and data contracts (highest value)
+- **Integration Tests**: End-to-end user scenarios and system interactions
+- **Unit Tests**: Complex business logic only when isolated testing adds value
+- **Property Tests**: Edge cases and invariant validation where applicable
+
+Rationale: Meaningful tests prevent regressions in user‑visible behavior, serve as living documentation, and enable safe refactoring without fear of breaking working functionality.
 
 ### V. Simplicity and Semantic Versioning
 
@@ -66,6 +82,33 @@ Prefer the simplest solution that meets requirements and evolve with versioned c
   migration guides. Breaking changes require a MAJOR release and explicit migration steps.
 
 Rationale: Simplicity reduces operational load; clear versioning maintains user trust.
+
+### VI. Atomic Commits & Agent Autonomy
+
+Feature development embraces atomic commits and agent-driven workflows:
+
+**Commit Strategy**:
+
+- Commits MUST be atomic: each commit contains one logical change that can be reviewed/tested independently
+- Commit messages MUST follow conventional format: `type(scope): description` (e.g., `feat(dns): add hosted zone discovery`)
+- Feature branches MUST use frequent, small commits rather than large batch commits
+- No work-in-progress commits; each commit MUST leave the codebase in a working state
+
+**Agent Autonomy on Feature Branches**:
+
+- On feature branches (pattern: `###-feature-name`), agents have FULL autonomy to commit changes
+- Agents MUST commit immediately after each atomic change (specs, plans, implementations, tests)
+- Agents SHOULD commit after completing logical units: spec clarification, research phase, design artifacts, test implementation
+- Agents MUST NOT wait for human approval to commit on feature branches
+- Humans MAY squash/merge commits when merging to main, but atomic commits enable better review
+
+**Quality Gates for Commits**:
+
+- All commits MUST pass linting and basic validation (if CI configured)
+- Breaking changes MUST be clearly marked in commit messages
+- Commits affecting user-facing behavior MUST update relevant documentation
+
+Rationale: Atomic commits enable better code review, easier debugging, and safer rollbacks. Agent autonomy on feature branches enables efficient development workflows while maintaining human oversight on main branch merges.
 
 ## Security Requirements
 
@@ -96,4 +139,4 @@ Rationale: Simplicity reduces operational load; clear versioning maintains user 
 - Compliance reviews: All PRs MUST include a Constitution checklist referencing affected principles.
 - Change log: Each amendment MUST update the version line below and summarize changes at the top.
 
-**Version**: 1.0.0 | **Ratified**: 2025-09-29 | **Last Amended**: 2025-09-29
+**Version**: 1.1.0 | **Ratified**: 2025-09-29 | **Last Amended**: 2025-09-29
