@@ -46,7 +46,8 @@ jobs:
           Perform a comprehensive spec-driven development review of this PR. Be thorough, insightful, and helpful. You have full permission to:
 
           1. Use \`gh pr diff ${{ github.event.pull_request.number }}\` to see what changed
-          2. Analyze all files in specs/${{ github.base_ref }}/ directory
+          2. Use \`gh pr view ${{ github.event.pull_request.number }}\` to see the PR details
+          3. Analyze all files in specs/${{ github.base_ref }}/ directory
             - spec.md
             - plan.md
             - tasks.md
@@ -54,10 +55,11 @@ jobs:
             - data-model.md
             - quickstart.md
             - contracts/
-          3. Review implementation code for spec compliance
-          4. Examine test coverage and identify gaps
-          5. Check API contracts, data validation, error handling
-          6. Post detailed PR comments with your findings
+          4. Review implementation code for spec compliance
+          5. Examine test coverage and identify gaps
+          6. Check API contracts, data validation, error handling
+          7. Post detailed PR comments with your findings
+            - If a previous version of the agent has posted a comment, update it instead of posting a new one
 
           # Style Guide for Comments:
           - Start with a clear executive summary
