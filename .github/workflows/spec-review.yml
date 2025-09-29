@@ -24,100 +24,55 @@ jobs:
           git config user.email "cursoragent@cursor.com"
 
       - name: Review specs and implementation
-        id: spec-review
         env:
           MODEL: "auto"
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH_PREFIX: spec-review
         run: |
-          # Run the review and capture output
-          if command -v cursor-agent &> /dev/null; then
-            echo "Running Cursor Agent review..."
-            REVIEW_OUTPUT=$(cursor-agent -p "You are operating in a GitHub Actions runner analyzing a pull request for spec-driven development compliance.
+          cursor-agent -p "You are operating in a GitHub Actions runner with full access to analyze and comment on pull requests.
 
-            # Context:
-            - Repository: ${{ github.repository }}
-            - PR Number: ${{ github.event.pull_request.number }}
-            - Base Branch: ${{ github.base_ref }}
-            - Head Branch: ${{ github.head_ref }}
+          # Context:
+          - Repository: ${{ github.repository }}
+          - PR Number: ${{ github.event.pull_request.number }}
+          - Base Branch: ${{ github.base_ref }}
+          - Head Branch: ${{ github.head_ref }}
 
-            # Task:
-            Perform a comprehensive spec-driven development review of this PR. Analyze specification files, implementation code, and test coverage.
+          # Your Mission:
+          Perform a comprehensive spec-driven development review of this PR. Be thorough, insightful, and helpful. You have full permission to:
 
-            # Requirements:
-            1. Use 'gh pr diff ${{ github.event.pull_request.number }}' to understand changes
-            2. Identify all specification files (.spec.ts, .test.ts, contract tests, feature specs)
-            3. Review implementation against specifications for completeness and compliance
-            4. Generate detailed findings covering:
-               - Spec-implementation alignment issues
-               - Test coverage gaps
-               - Architectural consistency problems
-               - API contract compliance
-            5. If significant issues found, create and push a spec-review branch with fixes
+          1. Use \`gh pr diff ${{ github.event.pull_request.number }}\` to see what changed
+          2. Analyze all files in specs/${{ github.base_ref }}/ directory
+            - spec.md
+            - plan.md
+            - tasks.md
+            - research.md
+            - data-model.md
+            - quickstart.md
+            - contracts/
+          3. Review implementation code for spec compliance
+          4. Examine test coverage and identify gaps
+          5. Check API contracts, data validation, error handling
+          6. Post detailed PR comments with your findings
 
-            # Output Format (Markdown):
-            ## Executive Summary
-            [1-2 sentence overview]
+          # Style Guide for Comments:
+          - Start with a clear executive summary
+          - Use markdown formatting liberally (headers, code blocks, lists)
+          - Be specific with file paths and line numbers
+          - Categorize findings by priority (Critical/High/Medium/Low)
+          - Include code examples when explaining issues
+          - End with actionable recommendations
+          - Reference Cloud-Router tech stack (TypeScript 5.x, Next.js 15.5, Express 5.x, AWS SDK, SQLite)
+          - Be encouraging and constructive, not pedantic
 
-            ## 🔴 Critical Issues
-            [Blocking issues that must be fixed]
+          # What Makes a Great Review:
+          - Connects specs to implementation quality
+          - Identifies real issues that matter
+          - Provides specific, actionable feedback
+          - Shows deep understanding of the codebase
+          - Helps the team ship better software
 
-            ## 🟡 High Priority
-            [Important issues affecting functionality]
+          # Comment on the PR with your findings.
 
-            ## 🟢 Medium Priority
-            [Improvements and optimizations]
-
-            ## 🔵 Low Priority
-            [Minor issues and suggestions]
-
-            ## Test Coverage Analysis
-            [Coverage gaps and recommendations]
-
-            ## Recommendations
-            [Actionable next steps]
-
-            [If spec-review branch created, include compare link]
-
-            Keep output focused and actionable. Skip empty sections." \
-            --force --model "$MODEL" --output-format=text 2>&1)
-          else
-            echo "Cursor Agent not available, falling back to basic analysis..."
-            REVIEW_OUTPUT="## Spec Review (Limited)
-
-            ⚠️ **Cursor Agent unavailable in CI environment**
-
-            ### Basic Analysis
-            - PR contains changes to: $(gh pr diff ${{ github.event.pull_request.number }} --name-only | head -10 | tr '\n' ', ')
-            - Manual review recommended for spec compliance
-
-            ### Next Steps
-            - Run full spec review locally with Cursor Agent
-            - Verify test coverage meets requirements
-            - Ensure API contracts are properly implemented"
-          fi
-
-          # Store output for next step
-          echo "$REVIEW_OUTPUT" > review-output.md
-          echo "REVIEW_BODY<<EOF" >> $GITHUB_OUTPUT
-          echo "$REVIEW_OUTPUT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Post PR comment
-        if: steps.spec-review.outputs.REVIEW_BODY != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Check if we already have a review comment
-          EXISTING_COMMENT=$(gh pr view ${{ github.event.pull_request.number }} --json comments --jq '.comments[] | select(.author.login == "github-actions[bot]" and (.body | contains("Spec Review"))) | .id' | head -1)
-
-          REVIEW_BODY="${{ steps.spec-review.outputs.REVIEW_BODY }}"
-
-          if [ -n "$EXISTING_COMMENT" ]; then
-            # Update existing comment
-            gh pr comment ${{ github.event.pull_request.number }} --edit $EXISTING_COMMENT --body "$REVIEW_BODY"
-          else
-            # Post new comment
-            gh pr comment ${{ github.event.pull_request.number }} --body "$REVIEW_BODY"
-          fi
+          Go deep, be thorough, and make this PR better!" \
+          --force --model "$MODEL" --output-format=text
