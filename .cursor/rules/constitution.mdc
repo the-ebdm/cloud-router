@@ -1,0 +1,12 @@
+---
+description: Make sure to read the constitution file at `.specify/memory/constitution.md` before making any changes.
+alwaysApply: true
+---
+
+# Cloud-Router Constitution Rules
+
+Make sure to read the constitution file at `.specify/memory/constitution.md` before making any changes.
+
+If anything violates the constitution, either by user request or by the agent, you **MUST** either stop and explain the violation, or update the constitution file to reflect the changes.
+
+Any new high level technical decisions that impact the entire project should be documented in the constitution.
