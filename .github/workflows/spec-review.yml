@@ -97,11 +97,7 @@ jobs:
                 ;;
               "assistant")
                 # Buffer assistant messages to accumulate full response
-                assistant_text=$(echo "$line" | jq -r '.message.content[0].text // empty')
-                if [ -n "$assistant_text" ]; then
-                  accumulated_text+="$assistant_text"
-                  echo "$assistant_text"
-                fi
+                printf "$(echo "$line" | jq -r '.message.content[0].text // empty')"
                 ;;
               "tool_call")
                 if [ "$subtype" = "started" ]; then
