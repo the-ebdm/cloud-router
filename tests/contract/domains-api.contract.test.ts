@@ -2,9 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { setupTestDatabase, teardownTestDatabase, TestDatabase } from '../fixtures/database.fixtures';
-
-// Import the domains router once it's implemented
-// import domainsRouter from '../../src/server/routers/domains';
+import domainsRouter from '../../src/server/routers/domains';
 
 // Mock Express app for testing
 let app: express.Application;
@@ -19,18 +17,14 @@ describe('Domains API Contract Tests', () => {
     app = express();
     app.use(express.json());
 
-    // TODO: Mount domains router when implemented
-    // app.use('/api/domains', domainsRouter);
+    // Mount the domains router
+    app.use('/api/v1/domains', domainsRouter);
 
-    // For now, return 501 Not Implemented for all routes
-    app.use('/api/domains', (req, res) => {
-      res.status(501).json({ error: 'Not Implemented' });
-    });
-    app.use('/api/domains/:domainId', (req, res) => {
-      res.status(501).json({ error: 'Not Implemented' });
-    });
-    app.use('/api/domains/:domainId/sync', (req, res) => {
-      res.status(501).json({ error: 'Not Implemented' });
+    // Mock authentication middleware for tests
+    app.use('/api/v1', (req, res, next) => {
+      // Skip authentication for tests
+      (req as any).apiKey = { id: 1, key: 'test-key' };
+      next();
     });
   });
 
@@ -41,7 +35,7 @@ describe('Domains API Contract Tests', () => {
   describe('POST /domains', () => {
     it('should add a domain successfully', async () => {
       const response = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'test.example.com'
         })
@@ -58,7 +52,7 @@ describe('Domains API Contract Tests', () => {
 
     it('should return 400 for invalid domain name', async () => {
       const response = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'invalid-domain-name'
         })
@@ -71,7 +65,7 @@ describe('Domains API Contract Tests', () => {
     it('should return 409 for duplicate domain', async () => {
       // First, add a domain
       await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'duplicate.example.com'
         })
@@ -79,7 +73,7 @@ describe('Domains API Contract Tests', () => {
 
       // Try to add the same domain again
       const response = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'duplicate.example.com'
         })
@@ -93,7 +87,7 @@ describe('Domains API Contract Tests', () => {
   describe('GET /domains', () => {
     it('should list all domains', async () => {
       const response = await request(app)
-        .get('/api/domains')
+        .get('/api/v1/domains')
         .expect(200);
 
       // This test should fail until the endpoint is implemented
@@ -106,7 +100,7 @@ describe('Domains API Contract Tests', () => {
     it('should get domain details with DNS records', async () => {
       // First create a domain to get details for
       const createResponse = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'details.example.com'
         })
@@ -115,7 +109,7 @@ describe('Domains API Contract Tests', () => {
       const domainId = createResponse.body.id;
 
       const response = await request(app)
-        .get(`/api/domains/${domainId}`)
+        .get(`/api/v1/domains/${domainId}`)
         .expect(200);
 
       // This test should fail until the endpoint is implemented
@@ -127,7 +121,7 @@ describe('Domains API Contract Tests', () => {
 
     it('should return 404 for non-existent domain', async () => {
       const response = await request(app)
-        .get('/api/domains/99999')
+        .get('/api/v1/domains/99999')
         .expect(404);
 
       // This test should fail until the endpoint is implemented
@@ -139,7 +133,7 @@ describe('Domains API Contract Tests', () => {
     it('should sync DNS records from Route53', async () => {
       // First create a domain to sync
       const createResponse = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'sync.example.com'
         })
@@ -148,7 +142,7 @@ describe('Domains API Contract Tests', () => {
       const domainId = createResponse.body.id;
 
       const response = await request(app)
-        .post(`/api/domains/${domainId}/sync`)
+        .post(`/api/v1/domains/${domainId}/sync`)
         .expect(200);
 
       // This test should fail until the endpoint is implemented
@@ -159,7 +153,7 @@ describe('Domains API Contract Tests', () => {
 
     it('should return 404 for non-existent domain', async () => {
       const response = await request(app)
-        .post('/api/domains/99999/sync')
+        .post('/api/v1/domains/99999/sync')
         .expect(404);
 
       // This test should fail until the endpoint is implemented
@@ -171,7 +165,7 @@ describe('Domains API Contract Tests', () => {
     it('should remove domain successfully', async () => {
       // First create a domain to delete
       const createResponse = await request(app)
-        .post('/api/domains')
+        .post('/api/v1/domains')
         .send({
           name: 'delete.example.com'
         })
@@ -180,7 +174,7 @@ describe('Domains API Contract Tests', () => {
       const domainId = createResponse.body.id;
 
       const response = await request(app)
-        .delete(`/api/domains/${domainId}`)
+        .delete(`/api/v1/domains/${domainId}`)
         .expect(204);
 
       // This test should fail until the endpoint is implemented
@@ -189,7 +183,7 @@ describe('Domains API Contract Tests', () => {
 
     it('should return 404 for non-existent domain', async () => {
       const response = await request(app)
-        .delete('/api/domains/99999')
+        .delete('/api/v1/domains/99999')
         .expect(404);
 
       // This test should fail until the endpoint is implemented
@@ -200,7 +194,7 @@ describe('Domains API Contract Tests', () => {
       // This test would require setting up routes for a domain first
       // For now, just test the basic structure
       const response = await request(app)
-        .delete('/api/domains/1')
+        .delete('/api/v1/domains/1')
         .expect(409);
 
       // This test should fail until route checking is implemented
