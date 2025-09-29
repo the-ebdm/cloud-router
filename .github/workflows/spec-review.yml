@@ -100,7 +100,7 @@ jobs:
                 content=$(echo "$line" | jq -r '.message.content[0].text // empty')
                 accumulated_text="$accumulated_text$content"
                 # Show live progress
-                printf "$content"
+                printf "\r📝 ${#accumulated_text}"
                 ;;
               "tool_call")
                 if [ "$subtype" = "started" ]; then
@@ -131,7 +131,6 @@ jobs:
                 total_time=$((end_time - start_time))
                 echo -e "\n\n🎯 Completed in ${duration}ms (${total_time}s total)"
                 echo "📊 Final stats: $tool_count tools, ${#accumulated_text} chars generated"
-                exit 0
                 ;;
             esac
           done
