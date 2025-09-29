@@ -5,12 +5,20 @@ on:
 
 jobs:
   assist:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Configure Bun
+        uses: jcbhmr/configure-bun-action@v1
+
+      - name: Setup Git
+        uses: actions4git/setup-git@v1
 
       - name: Install dependencies
         run: |
