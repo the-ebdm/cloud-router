@@ -96,10 +96,6 @@ jobs:
                 fi
                 ;;
               "assistant")
-                # Accumulate streaming text deltas
-                content=$(echo "$line" | jq -r '.message.content[0].text // empty')
-                accumulated_text="$accumulated_text$content"
-                # Show live progress
                 printf "$(echo "$line" | jq -r '.message.content[0].text')"
                 ;;
               "tool_call")
