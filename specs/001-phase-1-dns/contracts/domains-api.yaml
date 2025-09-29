@@ -1,0 +1,237 @@
+openapi: 3.0.3
+info:
+  title: Cloud Router DNS Management API
+  version: 1.0.0
+  description: API for managing domains and DNS records in Cloud Router
+
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+
+paths:
+  /domains:
+    post:
+      summary: Add a domain to Cloud Router
+      description: Discover or create Route53 hosted zone for the domain
+      operationId: addDomain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  format: hostname
+                  description: Domain name to add (e.g., example.com)
+                  example: "myapp.example.com"
+      responses:
+        '201':
+          description: Domain added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Domain'
+        '400':
+          description: Invalid domain name or validation error
+        '409':
+          description: Domain already exists
+        '500':
+          description: Route53 API error or server error
+
+    get:
+      summary: List domains
+      description: Get all domains managed by Cloud Router
+      operationId: listDomains
+      responses:
+        '200':
+          description: List of domains
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domains:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Domain'
+
+  /domains/{domainId}:
+    get:
+      summary: Get domain details
+      description: Get domain information including DNS records
+      operationId: getDomain
+      parameters:
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Domain ID
+      responses:
+        '200':
+          description: Domain details with DNS records
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Domain'
+                  - type: object
+                    properties:
+                      dnsRecords:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DNSRecord'
+        '404':
+          description: Domain not found
+
+    delete:
+      summary: Remove domain
+      description: Remove domain from Cloud Router (does not delete Route53 hosted zone)
+      operationId: removeDomain
+      parameters:
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Domain ID
+      responses:
+        '204':
+          description: Domain removed successfully
+        '404':
+          description: Domain not found
+        '409':
+          description: Cannot remove domain with active routes
+
+  /domains/{domainId}/sync:
+    post:
+      summary: Sync DNS records
+      description: Synchronize DNS records from Route53 hosted zone
+      operationId: syncDNSRecords
+      parameters:
+        - name: domainId
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Domain ID
+      responses:
+        '200':
+          description: DNS records synchronized
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  syncedRecords:
+                    type: integer
+                    description: Number of records synchronized
+                  createdAt:
+                    type: string
+                    format: date-time
+        '404':
+          description: Domain not found
+        '500':
+          description: Route53 API error
+
+components:
+  schemas:
+    Domain:
+      type: object
+      required:
+        - id
+        - name
+        - hostedZoneId
+        - delegationStatus
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          description: Unique domain identifier
+        name:
+          type: string
+          format: hostname
+          description: Domain name
+          example: "myapp.example.com"
+        hostedZoneId:
+          type: string
+          description: Route53 hosted zone ID
+          example: "Z1234567890ABC"
+        delegationStatus:
+          type: string
+          enum: [pending, completed, failed]
+          description: Domain registrar delegation status
+        zoneCreatedAt:
+          type: string
+          format: date-time
+          description: When Route53 hosted zone was created
+        lastSyncedAt:
+          type: string
+          format: date-time
+          description: Last DNS record synchronization
+        recordCount:
+          type: integer
+          description: Number of DNS records in zone
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DNSRecord:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - value
+        - ttl
+        - source
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          description: Unique DNS record identifier
+        name:
+          type: string
+          description: Record name (FQDN)
+          example: "api.myapp.example.com"
+        type:
+          type: string
+          enum: [A, AAAA, CNAME, MX, TXT, SRV, PTR]
+          description: DNS record type
+        value:
+          type: string
+          description: Record value
+          example: "cloud-router.example.com"
+        ttl:
+          type: integer
+          minimum: 0
+          maximum: 604800
+          description: Time-to-live in seconds
+        priority:
+          type: integer
+          description: MX record priority (optional)
+        weight:
+          type: integer
+          description: Weighted routing weight (optional)
+        source:
+          type: string
+          enum: [route53, cloud_router]
+          description: Record origin
+        createdByRouteId:
+          type: integer
+          description: Route that created this record (if applicable)
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
