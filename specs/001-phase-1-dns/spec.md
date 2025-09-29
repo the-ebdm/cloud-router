@@ -1,116 +1,51 @@
-# Feature Specification: [FEATURE NAME]
+# Feature Specification: DNS Management
 
-**Feature Branch**: `[###-feature-name]`  
-**Created**: [DATE]  
-**Status**: Draft  
-**Input**: User description: "$ARGUMENTS"
+**Feature Branch**: `001-phase-1-dns`
+**Created**: 2025-09-29
+**Status**: Draft
+**Input**: User description: "001-phase-1-dns"
 
-## Execution Flow (main)
-```
-1. Parse user description from Input
-   → If empty: ERROR "No feature description provided"
-2. Extract key concepts from description
-   → Identify: actors, actions, data, constraints
-3. For each unclear aspect:
-   → Mark with [NEEDS CLARIFICATION: specific question]
-4. Fill User Scenarios & Testing section
-   → If no clear user flow: ERROR "Cannot determine user scenarios"
-5. Generate Functional Requirements
-   → Each requirement must be testable
-   → Mark ambiguous requirements
-6. Identify Key Entities (if data involved)
-7. Run Review Checklist
-   → If any [NEEDS CLARIFICATION]: WARN "Spec has uncertainties"
-   → If implementation details found: ERROR "Remove tech details"
-8. Return: SUCCESS (spec ready for planning)
-```
+## Clarifications
 
----
+### Session 2025-09-29
 
-## ⚡ Quick Guidelines
-- ✅ Focus on WHAT users need and WHY
-- ❌ Avoid HOW to implement (no tech stack, APIs, code structure)
-- 👥 Written for business stakeholders, not developers
+- Q: What specific DNS operations should this feature support? → A: Basic DNS record management with Route53 integration for domain discovery and subdomain creation
 
-### Section Requirements
-- **Mandatory sections**: Must be completed for every feature
-- **Optional sections**: Include only when relevant to the feature
-- When a section doesn't apply, remove it entirely (don't leave as "N/A")
-
-### For AI Generation
-When creating this spec from a user prompt:
-1. **Mark all ambiguities**: Use [NEEDS CLARIFICATION: specific question] for any assumption you'd need to make
-2. **Don't guess**: If the prompt doesn't specify something (e.g., "login system" without auth method), mark it
-3. **Think like a tester**: Every vague requirement should fail the "testable and unambiguous" checklist item
-4. **Common underspecified areas**:
-   - User types and permissions
-   - Data retention/deletion policies  
-   - Performance targets and scale
-   - Error handling behaviors
-   - Integration requirements
-   - Security/compliance needs
-
----
-
-## User Scenarios & Testing *(mandatory)*
+## User Scenarios & Testing _(mandatory)_
 
 ### Primary User Story
-[Describe the main user journey in plain language]
+
+As a service operator, I want to add my domain to Cloud Router so that I can easily create subdomains for my services and see all existing DNS records, allowing me to manage my domain's DNS configuration alongside my routing setup.
 
 ### Acceptance Scenarios
-1. **Given** [initial state], **When** [action], **Then** [expected outcome]
-2. **Given** [initial state], **When** [action], **Then** [expected outcome]
+
+1. **Given** a domain that exists in Route53, **When** I add it to Cloud Router, **Then** the system finds the matching hosted zone and displays all current DNS records
+2. **Given** a domain that doesn't exist in Route53, **When** I add it to Cloud Router, **Then** the system creates a new hosted zone and displays the nameserver records I need to add at my domain registrar
+3. **Given** a domain added to Cloud Router, **When** I create a route with a dedicated subdomain, **Then** a new DNS record is automatically created in Route53 pointing to the Cloud Router
+4. **Given** a domain in Cloud Router with existing DNS records, **When** I view the domain page, **Then** I can see all current records including type, name, value, and TTL
 
 ### Edge Cases
-- What happens when [boundary condition]?
-- How does system handle [error scenario]?
 
-## Requirements *(mandatory)*
+- How does the system handle domains with many DNS records (performance/scalability)?
+- What happens when multiple hosted zones match a domain name?
+- How are DNS record conflicts handled when creating subdomains?
+- What happens when domain registrar delegation is not configured correctly?
+
+## Requirements _(mandatory)_
 
 ### Functional Requirements
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]  
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
 
-*Example of marking unclear requirements:*
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-001**: System MUST allow users to add domains by name and automatically discover matching Route53 hosted zones, creating a new hosted zone if none exists
+- **FR-002**: System MUST retrieve and display all DNS records from the discovered Route53 hosted zone
+- **FR-003**: System MUST persist domain information including name and associated hosted zone ID
+- **FR-004**: System MUST create CNAME records in Route53 when routes with dedicated subdomains are created
+- **FR-005**: System MUST validate domain ownership before allowing DNS record modifications
+- **FR-006**: System MUST prevent DNS record conflicts when creating new subdomains
+- **FR-007**: System MUST handle Route53 API errors gracefully with appropriate user feedback
+- **FR-008**: System MUST display the nameserver records for newly created hosted zones so users can configure domain delegation at their registrar
 
-### Key Entities *(include if feature involves data)*
-- **[Entity 1]**: [What it represents, key attributes without implementation]
-- **[Entity 2]**: [What it represents, relationships to other entities]
+### Key Entities _(include if feature involves data)_
 
----
-
-## Review & Acceptance Checklist
-*GATE: Automated checks run during main() execution*
-
-### Content Quality
-- [ ] No implementation details (languages, frameworks, APIs)
-- [ ] Focused on user value and business needs
-- [ ] Written for non-technical stakeholders
-- [ ] All mandatory sections completed
-
-### Requirement Completeness
-- [ ] No [NEEDS CLARIFICATION] markers remain
-- [ ] Requirements are testable and unambiguous  
-- [ ] Success criteria are measurable
-- [ ] Scope is clearly bounded
-- [ ] Dependencies and assumptions identified
-
----
-
-## Execution Status
-*Updated by main() during processing*
-
-- [ ] User description parsed
-- [ ] Key concepts extracted
-- [ ] Ambiguities marked
-- [ ] User scenarios defined
-- [ ] Requirements generated
-- [ ] Entities identified
-- [ ] Review checklist passed
-
----
+- **Domain**: Represents a DNS domain managed by Cloud Router, containing the domain name and associated Route53 hosted zone ID, with relationships to routes and services
+- **DNS Record**: Represents individual DNS records retrieved from Route53, containing type (A, CNAME, TXT, etc.), name, value, TTL, and other record attributes
+- **Route**: Represents routing configuration that may create subdomains, with flags indicating whether it creates dedicated subdomains versus path-based routing
