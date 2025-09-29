@@ -2,7 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { setupTestDatabase, teardownTestDatabase, TestDatabase } from '../fixtures/database.fixtures';
-import domainsRouter from '../../src/server/routers/domains';
 
 // Mock Express app for testing
 let app: express.Application;
