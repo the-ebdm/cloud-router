@@ -88,7 +88,7 @@ program.command("status").action(async () => {
   }
 
   // Get local branch name
-  const localBranch = await cdRun("git rev-parse --abbrev-ref HEAD");
+  const localBranch = await $`git rev-parse --abbrev-ref HEAD`.quiet().nothrow();
   if (localBranch.exitCode !== 0) {
     console.log("Failed to get local branch name; repository may be up to date or have issues. Continuing...");
   } else {
