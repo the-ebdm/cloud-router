@@ -15,7 +15,9 @@ jobs:
           fetch-depth: 0
 
       - name: Configure Bun
-        uses: jcbhmr/configure-bun-action@v1
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
 
       - name: Setup Git
         uses: actions4git/setup-git@v1
