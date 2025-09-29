@@ -58,13 +58,14 @@ As a service operator, I want to add my domain to Cloud Router so that I can eas
 - **NFR-004**: Route53 API operations MUST provide user-friendly error messages for failures with manual retry capability
 - **NFR-005**: System MUST implement basic domain ownership validation (MVP security)
 
-### Future Security Enhancements (Phase 2)
+### Future Security Enhancements
 
 _Note: Comprehensive security features deferred to future phase per MVP requirements_
 
 **Recommended Security Features:**
 
 - Multi-factor authentication for DNS operations
+  - Will require a full user account system to be implemented
 - Encryption of sensitive DNS record data at rest
 - Comprehensive audit logging with compliance requirements
 - Access controls and role-based permissions
