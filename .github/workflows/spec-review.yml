@@ -28,6 +28,7 @@ jobs:
           git config user.email "cursoragent@cursor.com"
 
       - name: Review specs and implementation
+        timeout-minutes: 5
         env:
           MODEL: "auto"
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
