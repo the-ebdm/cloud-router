@@ -100,7 +100,7 @@ jobs:
                 content=$(echo "$line" | jq -r '.message.content[0].text // empty')
                 accumulated_text="$accumulated_text$content"
                 # Show live progress
-                printf "\r📝 Generating: %d chars" ${#accumulated_text}
+                printf "$content"
                 ;;
               "tool_call")
                 if [ "$subtype" = "started" ]; then
