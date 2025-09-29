@@ -4,7 +4,7 @@ on:
     branches: ['**']
 
 jobs:
-  assist:
+  ci:
     permissions:
       contents: write
     runs-on: ubuntu-latest
