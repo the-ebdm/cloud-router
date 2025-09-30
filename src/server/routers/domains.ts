@@ -225,12 +225,21 @@ domainsRouter.delete('/:domainId', (req, res) => {
       return res.status(404).json({ error: 'Domain not found' });
     }
 
-    // Check if domain has active routes (simplified check - in real implementation
-    // would need to check routes table)
-    // For now, we'll allow deletion but this should be enhanced
-    // if (hasActiveRoutes(domainId)) {
-    //   return res.status(409).json({ error: 'Cannot remove domain with active routes' });
-    // }
+    // Check if domain has active routes
+    const routeCheckStmt = db.prepare('SELECT COUNT(*) as count FROM routes WHERE domain_id = ?');
+    const routeResult = routeCheckStmt.get(domainId) as { count: number };
+
+    if (routeResult.count > 0) {
+      logger.info('Cannot delete domain with active routes', {
+        domainId,
+        name: domain.name,
+        routeCount: routeResult.count
+      });
+      return res.status(409).json({
+        error: 'Cannot remove domain with active routes',
+        details: `Domain has ${routeResult.count} active route(s). Remove routes first.`
+      });
+    }
 
     logger.info('Deleting domain', { domainId, name: domain.name });
 
