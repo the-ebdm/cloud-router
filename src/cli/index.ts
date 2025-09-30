@@ -87,6 +87,15 @@ program.command("status").action(async () => {
     console.log("Git pull failed; repository may be up to date or have issues. Continuing...");
   }
 
+  // Get local branch name
+  const localBranch = await $`git rev-parse --abbrev-ref HEAD`.quiet().nothrow();
+  if (localBranch.exitCode !== 0) {
+    console.log("Failed to get local branch name; repository may be up to date or have issues. Continuing...");
+  } else {
+    console.log(`Checking out local branch: ${localBranch.stdout.toString().trim()}`);
+    await cdRun(`git checkout ${localBranch.stdout.toString().trim()}`);
+  }
+
   const bunPath = await ensureBun(config);  // Direct SSH, no runner needed now
 
   await cdRun(`${bunPath} install`);
