@@ -7,6 +7,8 @@ alwaysApply: true
 Auto-generated from all feature plans. Last updated: 2025-09-29
 
 ## Active Technologies
+- TypeScript 5.x / Bun + Next.js 15.5, Express 5.x, AWS SDK (Route53), SQLite, ACME client library (acme-client or similar) (002-phase-2-acme)
+- SQLite database (extend existing schema for certificates), file system for certificate/key storage with encryption (002-phase-2-acme)
 
 - TypeScript 5.x / Node.js + Next.js 15.5, Express 5.x, AWS SDK (for Route53), SQLite (001-phase-1-dns)
 
@@ -26,6 +28,7 @@ npm test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNO
 TypeScript 5.x / Node.js: Follow standard conventions
 
 ## Recent Changes
+- 002-phase-2-acme: Added TypeScript 5.x / Bun + Next.js 15.5, Express 5.x, AWS SDK (Route53), SQLite, ACME client library (acme-client or similar)
 
 - 001-phase-1-dns: Added TypeScript 5.x / Node.js + Next.js 15.5, Express 5.x, AWS SDK (for Route53), SQLite
 
@@ -56,8 +59,8 @@ npm test [ONLY COMMANDS FOR ACTIVE TECHNOLOGIES][ONLY COMMANDS FOR ACTIVE TECHNO
 TypeScript 5.x / Node.js: Follow standard conventions
 
 ## Recent Changes
+- 002-phase-2-acme: Added TypeScript 5.x / Bun + Next.js 15.5, Express 5.x, AWS SDK (Route53), SQLite, ACME client library (acme-client or similar)
 
-- 001-phase-1-dns: Added TypeScript 5.x / Node.js + Next.js 15.5, Express 5.x, AWS SDK (for Route53), SQLite
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

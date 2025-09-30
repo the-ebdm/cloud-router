@@ -1,0 +1,574 @@
+openapi: 3.0.3
+info:
+  title: Cloud Router Certificates API
+  description: API for ACME certificate provisioning, renewal, and management
+  version: 1.0.0
+  contact:
+    name: Cloud Router Team
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+paths:
+  /certificates:
+    get:
+      summary: List all certificates
+      description: Retrieve all certificates managed by Cloud Router
+      operationId: listCertificates
+      tags:
+        - Certificates
+      parameters:
+        - name: domain_id
+          in: query
+          description: Filter certificates by domain ID
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Filter certificates by status
+          schema:
+            type: string
+            enum: [pending, active, expired, renewal_failed, revoked]
+        - name: certificate_type
+          in: query
+          description: Filter by certificate type
+          schema:
+            type: string
+            enum: [default, custom]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Certificate'
+
+    post:
+      summary: Provision a custom certificate
+      description: Manually provision a certificate for specific domains
+      operationId: provisionCertificate
+      tags:
+        - Certificates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - domain_id
+                - domains
+              properties:
+                domain_id:
+                  type: integer
+                  description: Domain ID this certificate belongs to
+                domains:
+                  type: array
+                  items:
+                    type: string
+                  description: List of domains to include in certificate
+                  example: ["example.com", "*.example.com"]
+                key_type:
+                  type: string
+                  enum: [rsa-2048, rsa-4096, ecdsa-256, ecdsa-384]
+                  default: ecdsa-256
+                  description: Private key algorithm
+      responses:
+        '201':
+          description: Certificate provisioning started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Duplicate certificate request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /certificates/{id}:
+    get:
+      summary: Get certificate details
+      description: Retrieve detailed information about a specific certificate
+      operationId: getCertificate
+      tags:
+        - Certificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Certificate ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateDetailed'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Revoke certificate
+      description: Revoke a certificate via ACME protocol
+      operationId: revokeCertificate
+      tags:
+        - Certificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Certificate ID
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  enum: [unspecified, keyCompromise, superseded, cessationOfOperation]
+                  default: unspecified
+                  description: Revocation reason code
+      responses:
+        '200':
+          description: Certificate revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Certificate revoked successfully
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /certificates/{id}/renew:
+    post:
+      summary: Manually trigger certificate renewal
+      description: Force immediate renewal of a certificate
+      operationId: renewCertificate
+      tags:
+        - Certificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Certificate ID
+          schema:
+            type: integer
+      responses:
+        '202':
+          description: Renewal started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Certificate renewal started
+                  order_id:
+                    type: integer
+        '400':
+          description: Invalid request (e.g., cert too new to renew)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /certificates/{id}/export:
+    get:
+      summary: Export certificate
+      description: Download certificate and private key in specified format
+      operationId: exportCertificate
+      tags:
+        - Certificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Certificate ID
+          schema:
+            type: integer
+        - name: format
+          in: query
+          description: Export format
+          schema:
+            type: string
+            enum: [pem, pfx]
+            default: pem
+        - name: password
+          in: query
+          description: Password for PFX format (required if format=pfx)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Certificate exported successfully
+          content:
+            application/x-pem-file:
+              schema:
+                type: string
+                format: binary
+            application/x-pkcs12:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request (e.g., missing password for PFX)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /certificates/{id}/history:
+    get:
+      summary: Get certificate renewal history
+      description: Retrieve all renewal attempts for a certificate
+      operationId: getCertificateHistory
+      tags:
+        - Certificates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Certificate ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RenewalEvent'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /domains/{id}/certificate:
+    get:
+      summary: Get domain's default certificate
+      description: Retrieve the default apex+wildcard certificate for a domain
+      operationId: getDomainCertificate
+      tags:
+        - Domains
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Domain ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+        '404':
+          description: Domain not found or no certificate provisioned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /acme/account:
+    get:
+      summary: Get ACME account information
+      description: Retrieve current ACME account details
+      operationId: getAcmeAccount
+      tags:
+        - ACME
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcmeAccount'
+        '404':
+          description: No ACME account registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Register ACME account
+      description: Register a new ACME account with Let's Encrypt
+      operationId: registerAcmeAccount
+      tags:
+        - ACME
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - environment
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Contact email for ACME account
+                environment:
+                  type: string
+                  enum: [staging, production]
+                  description: Let's Encrypt environment
+                agree_to_terms:
+                  type: boolean
+                  description: Agree to Let's Encrypt Terms of Service
+                  default: true
+      responses:
+        '201':
+          description: ACME account registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcmeAccount'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: ACME account already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    Certificate:
+      type: object
+      required:
+        - id
+        - domain_id
+        - certificate_type
+        - covered_domains
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        domain_id:
+          type: integer
+          example: 5
+        certificate_type:
+          type: string
+          enum: [default, custom]
+          example: default
+        covered_domains:
+          type: array
+          items:
+            type: string
+          example: ["example.com", "*.example.com"]
+        status:
+          type: string
+          enum: [pending, active, expired, renewal_failed, revoked]
+          example: active
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-12-30T00:00:00Z"
+        issued_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-10-01T00:00:00Z"
+        key_type:
+          type: string
+          enum: [rsa-2048, rsa-4096, ecdsa-256, ecdsa-384]
+          example: ecdsa-256
+        renewal_failure_count:
+          type: integer
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-09-30T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-09-30T12:00:00Z"
+
+    CertificateDetailed:
+      allOf:
+        - $ref: '#/components/schemas/Certificate'
+        - type: object
+          properties:
+            certificate_chain:
+              type: string
+              description: Full certificate chain in PEM format (excluding private key)
+              example: "-----BEGIN CERTIFICATE-----\n..."
+            last_renewal_attempt:
+              type: string
+              format: date-time
+              nullable: true
+              example: "2025-11-30T03:00:00Z"
+            acme_order_url:
+              type: string
+              nullable: true
+              example: "https://acme-v02.api.letsencrypt.org/acme/order/..."
+
+    RenewalEvent:
+      type: object
+      required:
+        - id
+        - certificate_id
+        - attempt_number
+        - status
+        - started_at
+        - created_at
+      properties:
+        id:
+          type: integer
+          example: 42
+        certificate_id:
+          type: integer
+          example: 1
+        attempt_number:
+          type: integer
+          example: 1
+        status:
+          type: string
+          enum: [success, failure, in_progress]
+          example: success
+        error_code:
+          type: string
+          nullable: true
+          example: "DNS_PROPAGATION_TIMEOUT"
+        error_message:
+          type: string
+          nullable: true
+          example: "TXT record not propagated after 5 attempts"
+        started_at:
+          type: string
+          format: date-time
+          example: "2025-11-30T03:00:00Z"
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-11-30T03:05:23Z"
+        next_retry_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2025-11-30T04:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-11-30T03:00:00Z"
+
+    AcmeAccount:
+      type: object
+      required:
+        - id
+        - email
+        - account_url
+        - environment
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: "admin@example.com"
+        account_url:
+          type: string
+          example: "https://acme-v02.api.letsencrypt.org/acme/acct/12345"
+        environment:
+          type: string
+          enum: [staging, production]
+          example: production
+        status:
+          type: string
+          enum: [registered, deactivated, revoked]
+          example: registered
+        terms_of_service_agreed:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-09-30T12:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-09-30T12:00:00Z"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          example: "Certificate not found"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error context
+
+tags:
+  - name: Certificates
+    description: Certificate provisioning and management
+  - name: Domains
+    description: Domain-certificate integration
+  - name: ACME
+    description: ACME account management
