@@ -16,17 +16,20 @@ alwaysApply: true
 ## Constitutional Requirements
 
 ### Atomic Commits (Section VI)
+
 - **On feature branches**: Commit immediately after each atomic change
 - **DO NOT** batch multiple changes into one commit
 - **DO NOT** wait for human approval to commit
 - **Format**: `type(scope): description` (e.g., `feat(dns): add hosted zone discovery`)
 
 ### Test Quality (Section IV)
+
 - Focus on user-visible behavior, NOT implementation details
 - Remove tests that only validate mocks or internal functions
 - Contract tests > Integration tests > Unit tests (in value order)
 
 ### Security & Observability (Sections I & III)
+
 - Never log secrets or PII
 - Use structured logging with correlation IDs
 - Validate domain ownership and TLS certificates
@@ -34,6 +37,7 @@ alwaysApply: true
 ## Violation Handling
 
 **If you or the user request something that violates the constitution:**
+
 1. **STOP** immediately
 2. **EXPLAIN** the specific constitutional violation
 3. **PROPOSE** either:
@@ -41,6 +45,7 @@ alwaysApply: true
    - An amendment to the constitution with rationale
 
 **If you discover a violation after the fact:**
+
 1. **ACKNOWLEDGE** the violation
 2. **FIX** it immediately (e.g., split batched commits into atomic ones)
 3. **EXPLAIN** what you'll do differently going forward
@@ -48,6 +53,7 @@ alwaysApply: true
 ## High-Level Technical Decisions
 
 Any new architectural choices, framework selections, or process changes MUST be documented in the constitution with:
+
 - Rationale
 - Impact on existing principles
 - Migration path (if applicable)
