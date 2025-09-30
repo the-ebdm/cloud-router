@@ -24,11 +24,17 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-interface Route53Record {
-  Name: string;
-  Type: string;
-  TTL?: number;
-  ResourceRecords?: Array<{ Value: string }>;
+interface DNSRecord {
+  id?: number;
+  name: string;
+  type: string;
+  value: string;
+  ttl: number;
+  priority?: number;
+  weight?: number;
+  source?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export default function DomainDetailPage() {
@@ -37,14 +43,12 @@ export default function DomainDetailPage() {
   const id = params?.id as string;
 
   const [domainName, setDomainName] = useState<string>("");
-  const [records, setRecords] = useState<Route53Record[]>([]);
+  const [records, setRecords] = useState<DNSRecord[]>([]);
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<Route53Record | null>(
-    null
-  );
+  const [selectedRecord, setSelectedRecord] = useState<DNSRecord | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<number | null>(
     null
   );
@@ -53,17 +57,24 @@ export default function DomainDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    setLoading(true);
     fetchDomain();
     fetchServices();
-    fetchRecords();
   }, [id]);
 
   const fetchDomain = async () => {
     try {
-      const d = await apiRequest(`/domains/${id}`);
-      setDomainName(d.name);
+      const domain = await apiRequest(`/domains/${id}`);
+      setDomainName(domain.name);
+
+      // DNS records are included in the domain response
+      if (domain.dnsRecords) {
+        setRecords(domain.dnsRecords);
+      }
     } catch (e) {
       console.error("Failed to load domain", e);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -73,19 +84,6 @@ export default function DomainDetailPage() {
       setServices(s || []);
     } catch (e) {
       console.error("Failed to load services", e);
-    }
-  };
-
-  const fetchRecords = async () => {
-    setLoading(true);
-    try {
-      const recs = await apiRequest(`/domains/${id}/records`);
-      setRecords(recs || []);
-    } catch (e) {
-      console.error("Failed to list records", e);
-      setRecords([]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -99,9 +97,9 @@ export default function DomainDetailPage() {
     return rn; // fallback to full name
   };
 
-  const openCreateDialogForRecord = (rec: Route53Record) => {
+  const openCreateDialogForRecord = (rec: DNSRecord) => {
     setSelectedRecord(rec);
-    setRoutePath(computePathFromRecord(rec.Name, domainName));
+    setRoutePath(computePathFromRecord(rec.name, domainName));
     setShowCreateDialog(true);
   };
 
@@ -147,7 +145,14 @@ export default function DomainDetailPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Domain: {domainName}</h1>
           <div>
-            <Button onClick={() => fetchRecords()}>Refresh Records</Button>
+            <Button
+              onClick={() => {
+                setLoading(true);
+                fetchDomain();
+              }}
+            >
+              Refresh Records
+            </Button>
           </div>
         </div>
 
@@ -168,13 +173,11 @@ export default function DomainDetailPage() {
               </TableHeader>
               <TableBody>
                 {records.map((r, idx) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-medium">{r.Name}</TableCell>
-                    <TableCell>{r.Type}</TableCell>
-                    <TableCell>
-                      {r.ResourceRecords?.map((rr) => rr.Value).join(", ")}
-                    </TableCell>
-                    <TableCell>{r.TTL ?? "-"}</TableCell>
+                  <TableRow key={r.id || idx}>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell>{r.type}</TableCell>
+                    <TableCell>{r.value}</TableCell>
+                    <TableCell>{r.ttl}</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
                         <Button
@@ -207,7 +210,7 @@ export default function DomainDetailPage() {
             <form onSubmit={handleCreateRoute} className="space-y-4">
               <div>
                 <Label>Record</Label>
-                <Input readOnly value={selectedRecord?.Name || ""} />
+                <Input readOnly value={selectedRecord?.name || ""} />
               </div>
               <div>
                 <Label>Service</Label>
