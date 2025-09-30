@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, mock, beforeEach } from 'bun:test';
 import { HostedZoneCreationService } from '../../src/lib/services/hosted-zone-creation';
 import { Route53ClientService } from '../../src/lib/services/route53-client';
 import { DomainModel } from '../../src/lib/models/domain';
@@ -6,15 +6,18 @@ import { Database } from 'bun:sqlite';
 
 // Mock Route53ClientService
 const mockRoute53Client = {
-  createHostedZone: vi.fn()
+  createHostedZone: mock(() => Promise.resolve({
+    hostedZoneId: 'Z123456789',
+    nameServers: ['ns1.example.com', 'ns2.example.com']
+  }))
 };
 
 // Mock DomainModel
 const mockDomainModel = {
-  findByName: vi.fn(),
-  create: vi.fn(),
-  setHostedZoneId: vi.fn(),
-  setDelegationStatus: vi.fn()
+  findByName: mock(() => null),
+  create: mock(() => 1),
+  setHostedZoneId: mock(() => true),
+  setDelegationStatus: mock(() => true)
 };
 
 describe('HostedZoneCreationService - Bug Fix Test', () => {
@@ -41,7 +44,11 @@ describe('HostedZoneCreationService - Bug Fix Test', () => {
     `);
 
     // Reset mocks
-    vi.clearAllMocks();
+    mockRoute53Client.createHostedZone.mockClear();
+    mockDomainModel.findByName.mockClear();
+    mockDomainModel.create.mockClear();
+    mockDomainModel.setHostedZoneId.mockClear();
+    mockDomainModel.setDelegationStatus.mockClear();
 
     // Setup mock implementations
     mockRoute53Client.createHostedZone.mockResolvedValue({
@@ -59,7 +66,7 @@ describe('HostedZoneCreationService - Bug Fix Test', () => {
     );
   });
 
-  it('should create hosted zone with delegation status remaining pending', async () => {
+  test('should create hosted zone with delegation status remaining pending', async () => {
     const result = await service.createHostedZone({
       domainName: 'test.example.com'
     });
@@ -85,7 +92,7 @@ describe('HostedZoneCreationService - Bug Fix Test', () => {
     expect(mockDomainModel.setDelegationStatus).not.toHaveBeenCalledWith(1, 'completed');
   });
 
-  it('should update existing domain without changing delegation status to completed', async () => {
+  test('should update existing domain without changing delegation status to completed', async () => {
     // Mock existing domain
     const existingDomain = {
       id: 2,
