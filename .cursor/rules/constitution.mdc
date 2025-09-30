@@ -1,12 +1,59 @@
 ---
-description: Make sure to read the constitution file at `.specify/memory/constitution.md` before making any changes.
+description: CRITICAL - Read constitution FIRST before ANY work. Commit changes atomically.
 alwaysApply: true
 ---
 
-# Cloud-Router Constitution Rules
+# ⚠️ MANDATORY: Cloud-Router Constitution Compliance
 
-Make sure to read the constitution file at `.specify/memory/constitution.md` before making any changes.
+## 🛑 STOP - Read This FIRST
 
-If anything violates the constitution, either by user request or by the agent, you **MUST** either stop and explain the violation, or update the constitution file to reflect the changes.
+**BEFORE starting ANY work on this project, you MUST:**
 
-Any new high level technical decisions that impact the entire project should be documented in the constitution.
+1. **READ** `.specify/memory/constitution.md` in full
+2. **VERIFY** your planned changes comply with ALL constitutional principles
+3. **COMMIT** changes atomically on feature branches (one logical change per commit)
+
+## Constitutional Requirements
+
+### Atomic Commits (Section VI)
+- **On feature branches**: Commit immediately after each atomic change
+- **DO NOT** batch multiple changes into one commit
+- **DO NOT** wait for human approval to commit
+- **Format**: `type(scope): description` (e.g., `feat(dns): add hosted zone discovery`)
+
+### Test Quality (Section IV)
+- Focus on user-visible behavior, NOT implementation details
+- Remove tests that only validate mocks or internal functions
+- Contract tests > Integration tests > Unit tests (in value order)
+
+### Security & Observability (Sections I & III)
+- Never log secrets or PII
+- Use structured logging with correlation IDs
+- Validate domain ownership and TLS certificates
+
+## Violation Handling
+
+**If you or the user request something that violates the constitution:**
+1. **STOP** immediately
+2. **EXPLAIN** the specific constitutional violation
+3. **PROPOSE** either:
+   - An alternative approach that complies, OR
+   - An amendment to the constitution with rationale
+
+**If you discover a violation after the fact:**
+1. **ACKNOWLEDGE** the violation
+2. **FIX** it immediately (e.g., split batched commits into atomic ones)
+3. **EXPLAIN** what you'll do differently going forward
+
+## High-Level Technical Decisions
+
+Any new architectural choices, framework selections, or process changes MUST be documented in the constitution with:
+- Rationale
+- Impact on existing principles
+- Migration path (if applicable)
+
+---
+
+**Constitution Version**: 1.1.0  
+**Last Updated**: 2025-09-29  
+**Location**: `.specify/memory/constitution.md`
